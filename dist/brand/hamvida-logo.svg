@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="Hamvida Tech">
+  <!-- Rounded square badge -->
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#0B1020" stroke="#F5C542" stroke-width="8"/>
+  <!-- H letter -->
+  <path d="M40 36h16v22h16V36h16v56H72V70H56v22H40V36z" fill="#F5C542"/>
+</svg>
