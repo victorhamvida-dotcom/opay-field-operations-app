@@ -35,8 +35,7 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
 
   const handleAction = (type: 'fmcg_excellent' | 'standard_retail' | 'low_dormant' | 'terminal_stacking_trap') => {
     if (type === 'fmcg_excellent') {
-      soundManager.playPosDeploy();
-      soundManager.playTierUp();
+      soundManager.playCollect(1.5);
       confetti({ particleCount: 35, spread: 50, origin: { y: 0.6 } });
       onDeployPOS({
         potentialChange: 15,
@@ -49,7 +48,7 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
       });
       setLastActionMessage('✅ SUCCESS: Deployed 15 Terminals to Whitelisted FMCG Supermarkets! Both Standard and Excellent ratios surged.');
     } else if (type === 'standard_retail') {
-      soundManager.playPosDeploy();
+      soundManager.playCollect(1.1);
       onDeployPOS({
         potentialChange: 10,
         standardChange: 8,
@@ -61,7 +60,7 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
       });
       setLastActionMessage('✅ Deployed 10 Terminals to Busy Retail Shops. Standard POS ratio strengthened.');
     } else if (type === 'low_dormant') {
-      soundManager.playWrongApproach();
+      soundManager.playHit();
       onDeployPOS({
         potentialChange: 8,
         standardChange: 1,
@@ -73,8 +72,7 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
       });
       setLastActionMessage('⚠️ CAUTION: Deployed to Low-Footfall Kiosks. Low monthly revenue drags down your Standard/Excellent ratios!');
     } else if (type === 'terminal_stacking_trap') {
-      soundManager.playWrongApproach();
-      soundManager.playTierDown();
+      soundManager.playHit();
       onDeployPOS({
         potentialChange: 25,
         standardChange: 0,
@@ -89,8 +87,8 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
   };
 
   return (
-    <div className="modal-layer">
-      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-2xl modal-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-2xl max-h-[95vh] max-h-[95dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-4 border-b border-neutral-800 bg-neutral-950 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -115,7 +113,7 @@ export const POSDeploymentHub: React.FC<POSDeploymentHubProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-4 overflow-y-auto space-y-4 modal-card-body">
+        <div className="p-4 overflow-y-auto space-y-4">
           {/* Current Tier & Formula Status Banner */}
           <div className="bg-neutral-950 border border-emerald-500/30 rounded-xl p-3.5">
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-neutral-800">

@@ -20,8 +20,8 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
   onClearScores,
 }) => {
   return (
-    <div className="modal-layer">
-      <div className="bg-neutral-900 border border-emerald-500/30 rounded-2xl w-full max-w-md modal-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 safe-top safe-bottom">
+      <div className="bg-neutral-900 border border-emerald-500/30 rounded-2xl w-full max-w-md max-h-[90vh] max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-3 sm:p-4 border-b border-neutral-800 flex items-center justify-between bg-neutral-950/60">
           <div className="flex items-center gap-2">
@@ -47,7 +47,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({
         </div>
 
         {/* List */}
-        <div className="p-3 sm:p-4 overflow-y-auto space-y-2 modal-card-body">
+        <div className="p-3 sm:p-4 overflow-y-auto space-y-2">
           {scores.length === 0 ? (
             <div className="text-center py-8 text-neutral-500 text-sm">
               No field scores logged yet. Start a run and score verified loan disbursements!

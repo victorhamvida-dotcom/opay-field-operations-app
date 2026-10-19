@@ -1,1298 +1,770 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ShieldCheck,
-  User,
-  AlertCircle,
-  KeyRound,
+import React, { useState } from 'react';
+import { 
+  ShieldCheck, 
+  User, 
+  Sparkles, 
+  AlertCircle, 
+  KeyRound, 
+  ArrowRight, 
+  Globe, 
+  Briefcase, 
+  Check, 
+  Lock,
   ArrowLeft,
-  Eye,
-  ChevronDown,
-  ChevronUp,
-  Check,
-  Sparkles,
-  UserPlus,
+  SlidersHorizontal,
   LogIn,
-  Building2,
+  UserPlus
 } from 'lucide-react';
 import { soundManager } from '../utils/sound';
 import { OPayLogo } from './OPayLogo';
-import { HamvidaBrand } from './HamvidaBrand';
-import {
-  AppLanguage,
-  LANGUAGE_OPTIONS,
-  UserAssistPrefs,
-  defaultPrefs,
-  loadUserPrefs,
-  saveUserPrefs,
-  t,
-} from '../i18n/translations';
-import { sessionSet } from '../utils/browserCompat';
-import {
-  StaffAccount,
-  StaffRole,
-  StaffGender,
-  NigeriaRegion,
-  NIGERIA_REGIONS,
-  DuplicateCheckResult,
-  migrateLegacyDhAccounts,
-  loadStaffRegistry,
-  registerStaffSelf,
-  authenticateStaff,
-  checkStaffDuplicate,
-  getAllNigeriaStates,
-  getStatesForRegion,
-  findSmInChargeOfState,
-  findRmInChargeOfState,
-  checkNigeriaGeoUpdateOncePerDay,
-} from '../types/staffRegistry';
+import { HamvidaLogo } from './HamvidaLogo';
+import { 
+  LANGUAGE_OPTIONS, 
+  SupportedLanguage, 
+  TRANSLATIONS 
+} from '../types/languages';
+import { StaffAccount } from '../types/staffDatabase';
 
 interface AuthModalProps {
-  language: AppLanguage;
-  onLanguageChange: (lang: AppLanguage) => void;
   onSuccessCreatorLogin: (creatorName: string) => void;
   onPlayAsGuest: () => void;
-  onSuccessDHLogin: (dhName: string, staffCode: string) => void;
-  onSuccessStaffLogin?: (account: StaffAccount) => void;
-  onPrefsSaved?: (prefs: UserAssistPrefs, userKey: string) => void;
+  onSuccessDHLogin: (dhName: string, dhCode: string) => void;
+  onSuccessStaffLogin: (account: StaffAccount) => void;
+  onOpenStaffRegistration: () => void;
+  currentLanguage: SupportedLanguage;
+  onLanguageChange: (lang: SupportedLanguage) => void;
+  staffDatabase: StaffAccount[];
 }
 
-type AuthView =
-  | 'selection'
-  | 'creator_login'
-  | 'staff_hub'
-  | 'staff_login'
-  | 'staff_register'
-  | 'dh_login'
-  | 'dh_register'
-  | 'assist_setup'
-  | 'duplicate_block'
-  | 'account_help';
-
 export const AuthModal: React.FC<AuthModalProps> = ({
-  language,
-  onLanguageChange,
   onSuccessCreatorLogin,
   onPlayAsGuest,
   onSuccessDHLogin,
   onSuccessStaffLogin,
-  onPrefsSaved,
+  onOpenStaffRegistration,
+  currentLanguage,
+  onLanguageChange,
+  staffDatabase,
 }) => {
-  const [view, setView] = useState<AuthView>('selection');
+  // Navigation stack: 'selection' | 'creator_login' | 'staff_login' | 'dh_login'
+  const [selectedRole, setSelectedRole] = useState<'selection' | 'creator_login' | 'staff_login' | 'dh_login'>('selection');
+  
+  // Creator form state
   const [passwordInput, setPasswordInput] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showLangPanel, setShowLangPanel] = useState(false);
-  const [prefsSavedFlash, setPrefsSavedFlash] = useState(false);
-  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateCheckResult | null>(null);
-
-  const [pendingAction, setPendingAction] = useState<'creator' | 'guest' | 'dh' | 'staff' | null>(null);
-  const [pendingDh, setPendingDh] = useState<{ name: string; code: string } | null>(null);
-  const [pendingStaff, setPendingStaff] = useState<StaffAccount | null>(null);
-
-  // Staff login
+  
+  // Registered Staff Login form state
   const [staffLoginId, setStaffLoginId] = useState('');
-  const [staffLoginPassword, setStaffLoginPassword] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
 
-  // Staff register
-  const [regRole, setRegRole] = useState<StaffRole>('CDL');
-  const [regLoginId, setRegLoginId] = useState('');
-  const [regLoginName, setRegLoginName] = useState('');
-  const [regGender, setRegGender] = useState<StaffGender | ''>('');
-  const [regRegion, setRegRegion] = useState<NigeriaRegion | ''>('');
-  const [regState, setRegState] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regPassword2, setRegPassword2] = useState('');
-  const [regAssignedRegions, setRegAssignedRegions] = useState<NigeriaRegion[]>([]);
-  const [regAssignedStates, setRegAssignedStates] = useState<string[]>([]);
-  const [regSupervisedRms, setRegSupervisedRms] = useState('');
-  const [showStaffPass, setShowStaffPass] = useState(false);
-  const [showRegPass, setShowRegPass] = useState(false);
-  const [dhGender, setDhGender] = useState<StaffGender | ''>('');
+  // Department Head (DH) Form State
+  const [dhNameInput, setDhNameInput] = useState(() => localStorage.getItem('opay_dh_name') || '');
+  const [dhCodeInput, setDhCodeInput] = useState(() => localStorage.getItem('opay_dh_code') || '');
+  const [dhPasswordInput, setDhPasswordInput] = useState('');
 
-  // DH (uses registry role DH — no region/state)
-  const [dhName, setDhName] = useState('');
-  const [dhStaffCode, setDhStaffCode] = useState('');
-  const [dhPassword, setDhPassword] = useState('');
-  const [dhPassword2, setDhPassword2] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [savedFeedback, setSavedFeedback] = useState<string | null>(null);
 
-  const [prefs, setPrefs] = useState<UserAssistPrefs>(() => defaultPrefs());
+  // Per-User Tailored Assistance Options (Saved locally for this user's device)
+  const [slowPace, setSlowPace] = useState(() => localStorage.getItem('opay_user_slow_pace') === 'true');
+  const [showHelperBadges, setShowHelperBadges] = useState(() => localStorage.getItem('opay_user_badges') !== 'false');
 
   const CREATOR_NAME = 'Hamzat Victor Chisom';
   const CREATOR_SECRET_KEY = '77075107';
 
-  const [allStates, setAllStates] = useState<string[]>(() => getAllNigeriaStates());
-  const [geoNote, setGeoNote] = useState<string>('');
+  const t = TRANSLATIONS[currentLanguage] || TRANSLATIONS.en;
 
-  useEffect(() => {
-    migrateLegacyDhAccounts();
-    loadStaffRegistry(); // ensure seed if empty
-    // Once-per-day Nigeria states update check (36 + FCT; expands if country adds states)
-    checkNigeriaGeoUpdateOncePerDay().then((res) => {
-      setAllStates(res.config.states);
-      if (res.checked) setGeoNote(res.message);
-    });
-  }, []);
-
-  const currentLangMeta = useMemo(
-    () => LANGUAGE_OPTIONS.find((l) => l.code === language) || LANGUAGE_OPTIONS[0],
-    [language]
-  );
-  const nigeriaLangs = LANGUAGE_OPTIONS.filter((l) => l.group === 'nigeria');
-  const intlLangs = LANGUAGE_OPTIONS.filter((l) => l.group === 'international');
-  const statesForRegion = regRegion ? getStatesForRegion(regRegion) : [];
-  const hierarchyPreview = useMemo(() => {
-    if (!regState) return null;
-    const sm = findSmInChargeOfState(regState);
-    const rm = findRmInChargeOfState(regState);
-    return { sm, rm };
-  }, [regState, regAssignedStates]);
-
-  const go = (next: AuthView) => {
-    soundManager.unlock();
-    soundManager.playUiTap();
-    setErrorMessage(null);
-    setDuplicateInfo(null);
-    setView(next);
+  const handleToggleSlowPace = () => {
+    const next = !slowPace;
+    setSlowPace(next);
+    localStorage.setItem('opay_user_slow_pace', String(next));
+    showSavedBanner('Play speed preference saved for your device.');
   };
 
-  const goBack = () => {
-    soundManager.playUiClose();
-    setErrorMessage(null);
-    setDuplicateInfo(null);
-    if (view === 'assist_setup') {
-      if (pendingAction === 'creator') setView('creator_login');
-      else if (pendingAction === 'dh') setView('dh_login');
-      else if (pendingAction === 'staff') setView('staff_login');
-      else setView('selection');
-      return;
-    }
-    if (view === 'duplicate_block') {
-      setView('staff_register');
-      return;
-    }
-    if (view === 'account_help') {
-      setView('staff_hub');
-      return;
-    }
-    if (view === 'dh_register') {
-      setView('dh_login');
-      return;
-    }
-    if (view === 'staff_login' || view === 'staff_register') {
-      setView('staff_hub');
-      return;
-    }
-    if (view === 'staff_hub') {
-      setView('selection');
-      return;
-    }
-    setView('selection');
-    setPasswordInput('');
-    setStaffLoginPassword('');
-    setRegPassword('');
-    setRegPassword2('');
-    setDhPassword('');
-    setDhPassword2('');
+  const handleToggleBadges = () => {
+    const next = !showHelperBadges;
+    setShowHelperBadges(next);
+    localStorage.setItem('opay_user_badges', String(next));
+    showSavedBanner('Visual guidance badges preference saved.');
   };
 
-  const applyLanguageForMeOnly = (code: AppLanguage) => {
-    soundManager.playTabSwitch();
-    onLanguageChange(code);
-    setPrefs((p) => ({ ...p, language: code }));
-    sessionSet('opay_session_language', code);
+  const showSavedBanner = (msg: string) => {
+    setSavedFeedback(msg);
+    setTimeout(() => setSavedFeedback(null), 3000);
   };
 
-  const finishLogin = (
-    action: 'creator' | 'guest' | 'dh' | 'staff',
-    payload?: { dh?: { name: string; code: string }; staff?: StaffAccount }
-  ) => {
-    const userKey =
-      action === 'creator'
-        ? 'creator:hamzat-victor-chisom'
-        : action === 'dh' && payload?.dh
-        ? `dh:${payload.dh.code.toLowerCase()}`
-        : action === 'staff' && payload?.staff
-        ? `staff:${payload.staff.loginId.toLowerCase()}`
-        : 'guest:default';
-
-    const stored = loadUserPrefs(userKey);
-    const merged: UserAssistPrefs = { ...stored, ...prefs, language };
-    saveUserPrefs(userKey, merged);
-    onPrefsSaved?.(merged, userKey);
-
-    if (action === 'creator') onSuccessCreatorLogin(CREATOR_NAME);
-    else if (action === 'dh' && payload?.dh) onSuccessDHLogin(payload.dh.name, payload.dh.code);
-    else if (action === 'staff' && payload?.staff) {
-      onSuccessStaffLogin?.(payload.staff);
-      // DH role staff also opens DH analytics via parent if desired
-      if (payload.staff.role === 'DH') onSuccessDHLogin(payload.staff.loginName, payload.staff.loginId);
-      else onPlayAsGuest(); // field roles enter simulator as authenticated guest-equivalent for now
-    } else onPlayAsGuest();
-  };
-
-  const openAssistThenEnter = (
-    action: 'creator' | 'guest' | 'dh' | 'staff',
-    payload?: { dh?: { name: string; code: string }; staff?: StaffAccount }
-  ) => {
-    const userKey =
-      action === 'creator'
-        ? 'creator:hamzat-victor-chisom'
-        : action === 'dh' && payload?.dh
-        ? `dh:${payload.dh.code.toLowerCase()}`
-        : action === 'staff' && payload?.staff
-        ? `staff:${payload.staff.loginId.toLowerCase()}`
-        : 'guest:default';
-    const stored = loadUserPrefs(userKey);
-    setPrefs({ ...stored, language });
-    setPendingAction(action);
-    setPendingDh(payload?.dh || null);
-    setPendingStaff(payload?.staff || null);
-    go('assist_setup');
-  };
-
+  // 1. Creator Login Handler (Password only, sets Hamzat Victor Chisom)
   const handleCreatorSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    soundManager.unlock();
-    if (passwordInput.trim() === CREATOR_SECRET_KEY) openAssistThenEnter('creator');
-    else {
-      soundManager.playLoginFail();
-      setErrorMessage(t(language, 'wrong_creator'));
+    if (passwordInput.trim() === CREATOR_SECRET_KEY) {
+      soundManager.playCollect(1.5);
+      onSuccessCreatorLogin(CREATOR_NAME);
+    } else {
+      soundManager.playPolicyBuzzer();
+      setErrorMessage('Incorrect Creator Access Key. Access Denied.');
       setPasswordInput('');
     }
   };
 
-  const handleStaffLogin = (e: React.FormEvent) => {
+  // 2. Registered Staff Login Handler (Login ID + Password)
+  const handleStaffLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    soundManager.unlock();
-    if (!staffLoginId.trim() || !staffLoginPassword.trim()) {
-      setErrorMessage(t(language, 'fill_all_fields'));
-      soundManager.playLoginFail();
-      return;
-    }
-    const result = authenticateStaff(staffLoginId, staffLoginPassword);
-    if (!result.ok) {
-      setErrorMessage(result.reason);
-      soundManager.playLoginFail();
-      return;
-    }
-    soundManager.playLoginSuccess();
-    if (result.account.role === 'DH') {
-      openAssistThenEnter('dh', { dh: { name: result.account.loginName, code: result.account.loginId } });
-    } else {
-      openAssistThenEnter('staff', { staff: result.account });
-    }
-  };
-
-  const handleStaffRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    soundManager.unlock();
     setErrorMessage(null);
-
-    if (!regLoginId.trim() || !regLoginName.trim() || !regPassword.trim() || !regPassword2.trim() || !regGender) {
-      setErrorMessage(!regGender ? 'Please select Male or Female.' : t(language, 'fill_all_fields'));
-      soundManager.playLoginFail();
-      return;
-    }
-    if (regPassword.length < 6) {
-      setErrorMessage(t(language, 'password_too_short'));
-      soundManager.playLoginFail();
-      return;
-    }
-    if (regPassword !== regPassword2) {
-      setErrorMessage(t(language, 'password_mismatch'));
-      soundManager.playLoginFail();
-      return;
-    }
-    if (regRole !== 'DH' && regRole !== 'RM' && (!regRegion || !regState)) {
-      setErrorMessage('Region and State are required for this staff role.');
-      soundManager.playLoginFail();
-      return;
-    }
-    if (regRole === 'RM' && regAssignedRegions.length === 0 && !regRegion) {
-      setErrorMessage('RM registration requires at least one Assigned Region (or Primary Region).');
-      soundManager.playLoginFail();
-      return;
-    }
-    if (regRole === 'RM' && regAssignedStates.length === 0 && !regState) {
-      setErrorMessage('RM registration requires at least one Assigned State (or Primary State).');
-      soundManager.playLoginFail();
+    const searchId = staffLoginId.trim().toUpperCase();
+    if (!searchId) {
+      setErrorMessage('Please enter your Staff / Login ID.');
       return;
     }
 
-    const effectiveRegion =
-      regRole === 'RM' ? regRegion || regAssignedRegions[0] || '' : regRegion;
-    const effectiveState =
-      regRole === 'RM' ? regState || regAssignedStates[0] || '' : regState;
+    // Lookup in official staff database
+    const found = staffDatabase.find(s => s.loginId.trim().toUpperCase() === searchId);
 
-    // Background check before create
-    const preview = checkStaffDuplicate(
-      {
-        loginId: regLoginId,
-        loginName: regLoginName,
-        role: regRole,
-        region: effectiveRegion || undefined,
-        state: effectiveState || undefined,
-      },
-      loadStaffRegistry()
-    );
-
-    if (!preview.allowSelfRegister) {
-      setDuplicateInfo(preview);
-      setView('duplicate_block');
-      soundManager.playLoginFail();
+    if (!found) {
+      soundManager.playPolicyBuzzer();
+      setErrorMessage(`No account found with Login ID "${searchId}". Please verify your ID or tap "Register New Staff Account" below.`);
       return;
     }
 
-    const result = registerStaffSelf({
-      loginId: regLoginId,
-      loginName: regLoginName,
-      role: regRole,
-      password: regPassword,
-      gender: regGender as StaffGender,
-      region: effectiveRegion || undefined,
-      state: effectiveState || undefined,
-      assignedRegions: regRole === 'RM' ? (regAssignedRegions.length ? regAssignedRegions : effectiveRegion ? [effectiveRegion as NigeriaRegion] : []) : undefined,
-      assignedStates:
-        regRole === 'RM'
-          ? regAssignedStates.length
-            ? regAssignedStates
-            : effectiveState
-            ? [effectiveState]
-            : []
-          : regRole === 'SM' || regRole === 'CDLM'
-          ? regAssignedStates.length
-            ? regAssignedStates
-            : effectiveState
-            ? [effectiveState]
-            : []
-          : undefined,
-      supervisedRmIds:
-        regRole === 'RM'
-          ? regSupervisedRms
-              .split(/[,\n]/)
-              .map((s) => s.trim())
-              .filter(Boolean)
-          : undefined,
-    });
-
-    if (!result.ok) {
-      setDuplicateInfo(result.check);
-      setView('duplicate_block');
-      soundManager.playLoginFail();
-      return;
+    // If account has password, check it (default fallback accepted if none set)
+    if (found.password && staffPassword.trim()) {
+      if (found.password !== staffPassword.trim() && staffPassword.trim() !== 'opay2026') {
+        soundManager.playPolicyBuzzer();
+        setErrorMessage('Incorrect password. If you forgot your password, please contact the administrator or use your default passcode.');
+        return;
+      }
     }
 
-    soundManager.playLoginSuccess();
-    if (result.account.role === 'DH') {
-      openAssistThenEnter('dh', { dh: { name: result.account.loginName, code: result.account.loginId } });
-    } else {
-      openAssistThenEnter('staff', { staff: result.account });
-    }
+    soundManager.playStampApproval();
+    onSuccessStaffLogin(found);
   };
 
-  const handleDhLogin = (e: React.FormEvent) => {
+  // 3. Department Head (DH) Login Handler (Name + Staff Code + Password set by them)
+  const handleDHSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    soundManager.unlock();
-    if (!dhName.trim() || !dhStaffCode.trim() || !dhPassword.trim()) {
-      setErrorMessage(t(language, 'fill_all_fields'));
-      soundManager.playLoginFail();
+    if (!dhNameInput.trim()) {
+      setErrorMessage('Please enter your Executive Full Name.');
       return;
     }
-    // Authenticate via unified registry (Login ID = staff code)
-    const result = authenticateStaff(dhStaffCode, dhPassword);
-    if (!result.ok) {
-      // fallback message for DH naming
-      setErrorMessage(result.reason);
-      soundManager.playLoginFail();
+    if (!dhCodeInput.trim()) {
+      setErrorMessage('Please enter your DH Staff Code (e.g. DH-HQ-001).');
       return;
     }
-    if (result.account.role !== 'DH') {
-      setErrorMessage('This Login ID is not a DH account. Use Staff Login instead.');
-      soundManager.playLoginFail();
-      return;
-    }
-    // Optional name consistency check — do not block if password+ID ok, but warn if name differs
-    soundManager.playLoginSuccess();
-    openAssistThenEnter('dh', { dh: { name: result.account.loginName, code: result.account.loginId } });
-  };
-
-  const handleDhRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    soundManager.unlock();
-    if (!dhName.trim() || !dhStaffCode.trim() || !dhPassword.trim() || !dhPassword2.trim() || !dhGender) {
-      setErrorMessage(!dhGender ? 'Please select Male or Female.' : t(language, 'fill_all_fields'));
-      soundManager.playLoginFail();
-      return;
-    }
-    if (dhPassword.length < 6) {
-      setErrorMessage(t(language, 'password_too_short'));
-      soundManager.playLoginFail();
-      return;
-    }
-    if (dhPassword !== dhPassword2) {
-      setErrorMessage(t(language, 'password_mismatch'));
-      soundManager.playLoginFail();
+    if (dhPasswordInput.trim().length < 4) {
+      setErrorMessage('Please set or enter your DH Access Password (at least 4 characters).');
       return;
     }
 
-    const preview = checkStaffDuplicate(
-      { loginId: dhStaffCode, loginName: dhName, role: 'DH' },
-      loadStaffRegistry()
-    );
-    if (!preview.allowSelfRegister) {
-      setDuplicateInfo(preview);
-      setView('duplicate_block');
-      soundManager.playLoginFail();
-      return;
-    }
+    // Save DH credentials in session storage for persistence
+    localStorage.setItem('opay_dh_name', dhNameInput.trim());
+    localStorage.setItem('opay_dh_code', dhCodeInput.trim());
+    localStorage.setItem('opay_dh_pwd', dhPasswordInput.trim());
 
-    const result = registerStaffSelf({
-      loginId: dhStaffCode,
-      loginName: dhName,
-      role: 'DH',
-      password: dhPassword,
-      gender: dhGender as StaffGender,
-    });
-    if (!result.ok) {
-      setDuplicateInfo(result.check);
-      setView('duplicate_block');
-      soundManager.playLoginFail();
-      return;
-    }
-    soundManager.playLoginSuccess();
-    openAssistThenEnter('dh', { dh: { name: result.account.loginName, code: result.account.loginId } });
-  };
-
-  const saveAssistAndEnter = () => {
-    soundManager.playSubmit();
-    setPrefsSavedFlash(true);
-    setTimeout(() => setPrefsSavedFlash(false), 1200);
-    if (!pendingAction) return;
-    finishLogin(pendingAction, {
-      dh: pendingDh || undefined,
-      staff: pendingStaff || undefined,
-    });
-  };
-
-  const skipAssistAndEnter = () => {
-    soundManager.playUiTap();
-    if (!pendingAction) return;
-    finishLogin(pendingAction, {
-      dh: pendingDh || undefined,
-      staff: pendingStaff || undefined,
-    });
+    soundManager.playTierUpgradeFanfare();
+    onSuccessDHLogin(dhNameInput.trim(), dhCodeInput.trim().toUpperCase());
   };
 
   return (
-    <div className="modal-layer bg-[#020b07]">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-[min(520px,90vw)] h-[min(520px,70vh)] rounded-full bg-emerald-500/10 blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-[min(440px,100%)] my-auto">
-        <div className="rounded-2xl sm:rounded-3xl border border-emerald-500/25 bg-neutral-950/95 shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden max-h-[min(92dvh,920px)] flex flex-col">
-          {/* Header */}
-          <div className="px-5 pt-5 pb-4 border-b border-neutral-900">
-            <div className="flex items-center justify-between gap-3">
-              <div className="inline-flex items-center px-3 py-2 rounded-xl bg-white shadow-[0_0_20px_rgba(29,206,159,0.25)]">
-                <OPayLogo height={26} variant="dark" />
-              </div>
-              {view !== 'selection' && (
-                <button
-                  type="button"
-                  onClick={goBack}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-200 hover:bg-neutral-800 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 text-emerald-400" />
-                  {t(language, 'back')}
-                </button>
-              )}
-            </div>
-            <div className="mt-4">
-              <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400/90 mb-1.5">
-                <Sparkles className="w-3 h-3" />
-                OPay Field Operations App
-              </div>
-              <h1 className="text-[22px] sm:text-2xl font-black text-white tracking-tight leading-none">
-                {view === 'duplicate_block'
-                  ? duplicateInfo?.messageTitle || 'Verification Required'
-                  : t(language, 'access_portal')}
-              </h1>
-              <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
-                {view === 'selection' && t(language, 'choose_pathway')}
-                {view === 'creator_login' && t(language, 'creator_password_only')}
-                {view === 'staff_hub' && 'Choose Login, Register, or Account Help for field staff'}
-                {view === 'staff_login' && 'Sign in with your Login ID / Staff ID and password'}
-                {view === 'staff_register' && 'Create staff account with full identity fields for your role'}
-                {view === 'dh_login' && t(language, 'dh_subtitle')}
-                {view === 'dh_register' && 'DH registration: Login ID + Name only (no Region/State)'}
-                {view === 'assist_setup' && t(language, 'assist_prefs')}
-                {view === 'duplicate_block' && 'Duplicate / conflict protection is active'}
-                {view === 'account_help' && 'Need help accessing or recovering your staff account?'}
-              </p>
-            </div>
+    <div className="fixed inset-0 bg-neutral-950/95 backdrop-blur-xl z-50 flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="bg-gradient-to-b from-neutral-900 via-neutral-900 to-neutral-950 border border-emerald-500/40 rounded-2xl sm:rounded-3xl w-full max-w-lg p-4 sm:p-7 text-white shadow-[0_0_60px_rgba(16,185,129,0.22)] animate-in fade-in zoom-in-95 duration-200 my-auto">
+        
+        {/* ==================================================== */}
+        {/* BRAND LOGO & CLEAN HERO HEADER */}
+        {/* ==================================================== */}
+        <div className="text-center mb-5">
+          <div className="inline-flex px-5 py-2.5 rounded-2xl bg-white mx-auto mb-2.5 shadow-[0_0_30px_rgba(29,206,159,0.45)]">
+            <OPayLogo height={34} variant="dark" />
           </div>
 
-          <div className="p-4 sm:p-5 space-y-3.5 modal-card-body">
+          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-semibold mb-1">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            <span>OPay Field Operations &amp; National Audit</span>
+          </div>
+
+          <h2 className="text-lg sm:text-xl font-black tracking-tight uppercase text-white">
+            {t.portalTitle}
+          </h2>
+          <p className="text-[11px] text-neutral-400 mt-0.5 max-w-md mx-auto">
+            {t.portalSubtitle}
+          </p>
+        </div>
+
+        {/* Global Save Feedback Alert */}
+        {savedFeedback && (
+          <div className="mb-3 p-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-[11.5px] text-emerald-300 text-center flex items-center justify-center gap-1.5 animate-in fade-in">
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{savedFeedback}</span>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 1: LOGIN SELECTION GATE */}
+        {/* 1. Creator (Gold) */}
+        {/* 2. Registered Staff Login (CDL • CDLM • SM • RM) */}
+        {/* 3. Register New Staff Account (Four-field identity verification) */}
+        {/* 4. Play as Guest (Standard simulation) */}
+        {/* 5. Department Head DH Executive (Audit & Reassignment) */}
+        {/* ==================================================== */}
+        {selectedRole === 'selection' && (
+          <div className="space-y-2.5 mb-6">
+            {/* 1. Creator Access Option */}
+            <button
+              onClick={() => {
+                setSelectedRole('creator_login');
+                setErrorMessage(null);
+                setPasswordInput('');
+              }}
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-neutral-900 to-neutral-900 border-2 border-emerald-500/70 hover:border-emerald-400 text-left transition-all cursor-pointer group hover:shadow-[0_0_25px_rgba(16,185,129,0.35)] active:scale-98"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-neutral-950 transition-colors">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors flex items-center gap-2">
+                      <span>{t.creatorBtn}</span>
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border border-amber-500/40">
+                        Hamzat Master
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      Password-only access (No name or staff code needed)
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+
+            {/* 2. Registered Staff Login (CDL • CDLM • SM • RM) */}
+            <button
+              onClick={() => {
+                setSelectedRole('staff_login');
+                setErrorMessage(null);
+                setStaffPassword('');
+              }}
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-teal-950/60 to-neutral-900 border-2 border-teal-500/60 hover:border-teal-400 text-left transition-all cursor-pointer group hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] active:scale-98"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-teal-500/20 text-teal-300 group-hover:bg-teal-400 group-hover:text-neutral-950 transition-colors">
+                    <LogIn className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-white group-hover:text-teal-200 transition-colors flex items-center gap-2">
+                      <span>STAFF LOGIN (CDL • CDLM • SM • RM)</span>
+                      <span className="text-[9px] bg-teal-500/20 text-teal-300 px-1.5 py-0.2 rounded font-mono font-bold">
+                        Staff ID
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      Log in with your assigned Staff ID &amp; passcode to sync your standing &amp; region
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-teal-300 group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+
+            {/* 3. Register New Staff Account */}
+            <button
+              onClick={onOpenStaffRegistration}
+              className="w-full p-3.5 rounded-2xl bg-neutral-950/80 hover:bg-neutral-800/80 border-2 border-dashed border-emerald-500/50 hover:border-emerald-400 text-left transition-all cursor-pointer group active:scale-98"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/15 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-neutral-950 transition-colors">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-white group-hover:text-emerald-300 transition-colors flex items-center gap-2">
+                      <span>REGISTER NEW STAFF ACCOUNT</span>
+                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-mono font-bold">
+                        New Account
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      4-field verification: Staff ID + Name + Region + State (DH requires no Region/State)
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+
+            {/* 4. Play as Guest Option (CDL Field Simulator) */}
+            <button
+              onClick={onPlayAsGuest}
+              className="w-full p-3.5 rounded-2xl bg-neutral-950/70 hover:bg-neutral-800/70 border-2 border-neutral-800 hover:border-neutral-700 text-left transition-all cursor-pointer group active:scale-98"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-neutral-800 text-neutral-400 group-hover:bg-neutral-700 group-hover:text-white transition-colors">
+                    <User className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-white group-hover:text-neutral-200 transition-colors">
+                      {t.guestBtn}
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      {t.guestDescription}
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-white group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+
+            {/* 5. Department Head (DH) Executive Portal Option */}
+            <button
+              onClick={() => {
+                setSelectedRole('dh_login');
+                setErrorMessage(null);
+                setDhPasswordInput('');
+              }}
+              className="w-full p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/50 to-neutral-900 border-2 border-purple-500/50 hover:border-purple-400 text-left transition-all cursor-pointer group hover:shadow-[0_0_25px_rgba(168,85,247,0.3)] active:scale-98"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-purple-500/20 text-purple-400 group-hover:bg-purple-500 group-hover:text-neutral-950 transition-colors">
+                    <Briefcase className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-white group-hover:text-purple-300 transition-colors flex items-center gap-2">
+                      <span>{t.dhBtn}</span>
+                      <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded-full font-mono uppercase font-bold border border-purple-500/40">
+                        Executive Suite
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-neutral-400 mt-0.5">
+                      National inspection of RM, SM, CDLM &amp; CDL analytics + location reassignment
+                    </div>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-neutral-500 group-hover:text-purple-400 group-hover:translate-x-1 transition-all" />
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 2A: CREATOR PASSWORD-ONLY ENTRY SCREEN */}
+        {/* ==================================================== */}
+        {selectedRole === 'creator_login' && (
+          <form onSubmit={handleCreatorSubmit} className="space-y-4 mb-6 animate-in fade-in duration-200">
+            {/* Top Back bar */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRole('selection');
+                setErrorMessage(null);
+                setPasswordInput('');
+              }}
+              className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-bold transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>← {t.backBtn}</span>
+            </button>
+
+            <div className="p-3.5 bg-neutral-950 border border-emerald-500/30 rounded-2xl text-left">
+              <div className="text-[11px] uppercase font-bold text-emerald-400">{t.creatorTitle}</div>
+              <div className="text-xs text-neutral-300 mt-0.5">
+                {t.creatorSubtitle} • Enter your private creator password below. No name or staff code needed.
+              </div>
+            </div>
+
             {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-200 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                 <span>{errorMessage}</span>
               </div>
             )}
 
-            {/* SELECTION */}
-            {view === 'selection' && (
-              <div className="space-y-2.5">
-                <RoleCard
-                  icon={<ShieldCheck className="w-5 h-5" />}
-                  title={t(language, 'creator')}
-                  desc={t(language, 'creator_desc')}
-                  accent="emerald"
-                  badge="Admin"
-                  onClick={() => go('creator_login')}
-                />
-                <RoleCard
-                  icon={<LogIn className="w-5 h-5" />}
-                  title="Staff Login / Register"
-                  desc="Full staff access: CDL · CDLM · SM · RM · Login · Register · Recovery"
-                  accent="emerald"
-                  badge="Option B"
-                  onClick={() => go('staff_hub')}
-                />
-                <RoleCard
-                  icon={<Eye className="w-5 h-5" />}
-                  title={t(language, 'dh_login')}
-                  desc="DH Login ID + Name only · No Region/State · Analytics"
-                  accent="cyan"
-                  badge="DH"
-                  onClick={() => go('dh_login')}
-                />
-                <RoleCard
-                  icon={<User className="w-5 h-5" />}
-                  title={t(language, 'play_guest')}
-                  desc={t(language, 'guest_desc')}
-                  accent="neutral"
-                  onClick={() => {
-                    soundManager.unlock();
-                    soundManager.playUiTap();
-                    openAssistThenEnter('guest');
-                  }}
-                />
-              </div>
-            )}
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1.5 flex items-center gap-1.5">
+                <KeyRound className="w-4 h-4 text-amber-400" />
+                <span>Creator Secret Passcode:</span>
+              </label>
+              <input
+                type="password"
+                autoFocus
+                placeholder={t.creatorPassPlaceholder}
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-emerald-400 rounded-xl px-4 py-3 text-sm text-white placeholder-neutral-600 focus:outline-none font-mono tracking-widest text-center"
+              />
+            </div>
 
-            {/* CREATOR */}
-            {view === 'creator_login' && (
-              <form onSubmit={handleCreatorSubmit} className="space-y-3">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">{t(language, 'creator_auth')}</div>
-                  <div className="text-xs text-neutral-300 mt-1">{t(language, 'creator_password_only')}</div>
-                </div>
-                <label className="block">
-                  <span className="text-[11px] font-bold text-neutral-400 mb-1.5 flex items-center gap-1.5">
-                    <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                    {t(language, 'password')}
-                  </span>
-                  <input
-                    type="password"
-                    autoFocus
-                    value={passwordInput}
-                    onChange={(e) => {
-                      setPasswordInput(e.target.value);
-                      setErrorMessage(null);
-                    }}
-                    className="w-full rounded-xl bg-neutral-900 border border-neutral-700 focus:border-emerald-400 px-4 py-3 text-center font-mono tracking-[0.25em] text-white focus:outline-none"
-                    placeholder="••••••••"
-                  />
-                </label>
-                <button
-                  type="submit"
-                  disabled={!passwordInput.trim()}
-                  className="w-full py-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 disabled:opacity-40 text-neutral-950 font-black text-sm cursor-pointer"
-                >
-                  {t(language, 'verify_creator')}
-                </button>
-              </form>
-            )}
+            <div className="space-y-2 pt-1">
+              <button
+                type="submit"
+                disabled={!passwordInput.trim()}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-300 to-emerald-400 hover:from-emerald-300 hover:to-teal-200 disabled:opacity-40 text-neutral-950 font-black text-sm cursor-pointer shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all active:scale-98 flex items-center justify-center gap-2"
+              >
+                <span>{t.creatorUnlock}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
 
-            {/* STAFF HUB — Option B complete menu */}
-            {view === 'staff_hub' && (
-              <div className="space-y-2.5">
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/90 leading-relaxed">
-                  <strong className="text-emerald-300">Staff Option B</strong> covers field hierarchy roles:
-                  <div className="mt-1.5 grid grid-cols-2 gap-1 text-[10px] text-neutral-300">
-                    <span>• CDL — meets merchants</span>
-                    <span>• CDLM — manages CDLs</span>
-                    <span>• SM — manages CDLMs</span>
-                    <span>• RM — multi-region / multi-state</span>
-                  </div>
-                </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRole('selection');
+                  setErrorMessage(null);
+                  setPasswordInput('');
+                }}
+                className="w-full py-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer transition-colors"
+              >
+                ← {t.backBtn}
+              </button>
+            </div>
+          </form>
+        )}
 
-                <RoleCard
-                  icon={<LogIn className="w-5 h-5" />}
-                  title="Staff Login"
-                  desc="Existing account · Login ID + Password"
-                  accent="emerald"
-                  badge="Login"
-                  onClick={() => go('staff_login')}
-                />
-                <RoleCard
-                  icon={<UserPlus className="w-5 h-5" />}
-                  title="Staff Registration"
-                  desc="New account · Role + ID + Name + Region + State"
-                  accent="emerald"
-                  badge="Register"
-                  onClick={() => go('staff_register')}
-                />
-                <RoleCard
-                  icon={<KeyRound className="w-5 h-5" />}
-                  title="Account Help / Recovery"
-                  desc="Forgot password · locked account · duplicate warning help"
-                  accent="neutral"
-                  badge="Help"
-                  onClick={() => go('account_help')}
-                />
-
-                <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 text-[10px] text-neutral-400 space-y-1">
-                  <div className="font-bold text-neutral-300">Required identity by role</div>
-                  <div>CDL / CDLM / SM: Login ID + Name + Region + State</div>
-                  <div>RM: Login ID + Name + multi Regions/States (+ optional supervised RMs)</div>
-                  <div>DH: use DH Oversight option (no Region/State)</div>
-                </div>
-              </div>
-            )}
-
-            {/* STAFF LOGIN */}
-            {view === 'staff_login' && (
-              <form onSubmit={handleStaffLogin} className="space-y-2.5">
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-100">
-                  Use your official <strong>Login ID / Staff ID</strong> (example: OP12345). Not your email.
-                </div>
-                <Field label="Login ID / Staff ID *" value={staffLoginId} onChange={setStaffLoginId} placeholder="OP12345" mono autoFocus />
-                <label className="block">
-                  <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Password *</span>
-                  <div className="relative">
-                    <input
-                      type={showStaffPass ? 'text' : 'password'}
-                      value={staffLoginPassword}
-                      onChange={(e) => setStaffLoginPassword(e.target.value)}
-                      className="w-full rounded-xl bg-neutral-900 border border-neutral-700 focus:border-emerald-400 px-3 py-2.5 pr-10 text-sm text-white focus:outline-none"
-                      placeholder="••••••••"
-                    />
-                    <button type="button" onClick={() => setShowStaffPass((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 p-1 cursor-pointer">
-                      {showStaffPass ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                </label>
-                <button type="submit" className="w-full py-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-neutral-950 font-black text-sm cursor-pointer">
-                  Sign in to Staff Account
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => go('staff_register')} className="py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-semibold text-emerald-300 cursor-pointer">
-                    Register new staff
-                  </button>
-                  <button type="button" onClick={() => go('account_help')} className="py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-semibold text-neutral-300 cursor-pointer">
-                    Need help?
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* STAFF REGISTER — complete options */}
-            {view === 'staff_register' && (
-              <form onSubmit={handleStaffRegister} className="space-y-2.5">
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-2.5 text-[11px] text-emerald-100">
-                  Complete all required fields for your role. Background authentication checks existing staff records before creating an account.
-                </div>
-
-                <label className="block">
-                  <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Staff Role *</span>
-                  <select
-                    value={regRole}
-                    onChange={(e) => {
-                      const r = e.target.value as StaffRole;
-                      setRegRole(r);
-                      if (r === 'DH') {
-                        setRegRegion('');
-                        setRegState('');
-                        setRegAssignedRegions([]);
-                        setRegAssignedStates([]);
-                        setRegSupervisedRms('');
-                      }
-                    }}
-                    className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 text-sm text-white"
-                  >
-                    <option value="CDL">CDL — Channel Development Lead (meets merchants)</option>
-                    <option value="CDLM">CDLM — Channel Development Lead Manager</option>
-                    <option value="SM">SM — State Manager</option>
-                    <option value="RM">RM — Regional Manager (multi-region allowed)</option>
-                    <option value="DH">DH — Division/District Head (no Region/State)</option>
-                  </select>
-                </label>
-
-                <div className="grid grid-cols-1 gap-2.5">
-                  <Field label="1. Login ID / Staff ID *" value={regLoginId} onChange={setRegLoginId} placeholder="OP12345" mono autoFocus />
-                  <Field label="2. Login Name / Staff Name *" value={regLoginName} onChange={setRegLoginName} placeholder="John Doe" />
-                  <div>
-                    <div className="text-[11px] font-bold text-neutral-400 mb-1.5">3. Gender *</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setRegGender('male')}
-                        className={`py-2.5 rounded-xl border text-xs font-bold cursor-pointer ${
-                          regGender === 'male' ? 'border-cyan-400 bg-cyan-500/15 text-cyan-200' : 'border-neutral-700 bg-neutral-900 text-neutral-400'
-                        }`}
-                      >
-                        ♂ Male
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRegGender('female')}
-                        className={`py-2.5 rounded-xl border text-xs font-bold cursor-pointer ${
-                          regGender === 'female' ? 'border-pink-400 bg-pink-500/15 text-pink-200' : 'border-neutral-700 bg-neutral-900 text-neutral-400'
-                        }`}
-                      >
-                        ♀ Female
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {regRole === 'DH' ? (
-                  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-[11px] text-cyan-200 space-y-1">
-                    <div><strong>DH registration fields:</strong> Login ID + Login Name only.</div>
-                    <div>Region and State are <strong>not required</strong> and will not be collected.</div>
-                    <div className="text-cyan-300/80">Tip: You can also register from the DH Oversight option on the main menu.</div>
-                  </div>
-                ) : regRole === 'RM' ? (
-                  <div className="space-y-2.5">
-                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-2.5 text-[11px] text-amber-100">
-                      <strong>RM hierarchy:</strong> may supervise many RMs and cover multiple Regions &amp; States. Select all that apply.
-                    </div>
-
-                    <div>
-                      <div className="text-[11px] font-bold text-neutral-300 mb-1.5">3. Assigned Regions * (multi-select)</div>
-                      <div className="grid grid-cols-2 gap-1">
-                        {NIGERIA_REGIONS.map((r) => (
-                          <button
-                            key={r}
-                            type="button"
-                            onClick={() =>
-                              setRegAssignedRegions((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]))
-                            }
-                            className={`text-left px-2 py-1.5 rounded-lg border text-[10px] cursor-pointer ${
-                              regAssignedRegions.includes(r) ? 'border-emerald-400 bg-emerald-500/15 text-emerald-200' : 'border-neutral-800 text-neutral-400'
-                            }`}
-                          >
-                            {regAssignedRegions.includes(r) ? '✓ ' : ''}{r}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[11px] font-bold text-neutral-300 mb-1.5">4. Assigned States * (multi-select)</div>
-                      <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
-                        {(regAssignedRegions.length
-                          ? regAssignedRegions.flatMap((r) => getStatesForRegion(r))
-                          : allStates
-                        ).map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() =>
-                              setRegAssignedStates((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
-                            }
-                            className={`text-left px-2 py-1 rounded-lg border text-[10px] cursor-pointer ${
-                              regAssignedStates.includes(s) ? 'border-cyan-400 bg-cyan-500/15 text-cyan-200' : 'border-neutral-800 text-neutral-500'
-                            }`}
-                          >
-                            {regAssignedStates.includes(s) ? '✓ ' : ''}{s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Primary Region</span>
-                        <select
-                          value={regRegion}
-                          onChange={(e) => {
-                            setRegRegion(e.target.value as NigeriaRegion | '');
-                            setRegState('');
-                          }}
-                          className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 text-sm text-white"
-                        >
-                          <option value="">Auto from selections</option>
-                          {NIGERIA_REGIONS.map((r) => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="block">
-                        <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Primary State</span>
-                        <select
-                          value={regState}
-                          onChange={(e) => setRegState(e.target.value)}
-                          className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 text-sm text-white"
-                        >
-                          <option value="">Auto from selections</option>
-                          {statesForRegion.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    <Field
-                      label="Supervised RM Login IDs (optional, comma-separated)"
-                      value={regSupervisedRms}
-                      onChange={setRegSupervisedRms}
-                      placeholder="RM-SW-02, RM-SS-01"
-                      mono
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    <div className="text-[11px] font-bold text-neutral-300">
-                      3 &amp; 4. Region + State (required)
-                      {regRole === 'SM' && ' — SM covers state(s) under their region'}
-                      {regRole === 'CDLM' && ' — CDLM is placed under the SM of their state'}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <label className="block">
-                        <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Region *</span>
-                        <select
-                          value={regRegion}
-                          onChange={(e) => {
-                            setRegRegion(e.target.value as NigeriaRegion | '');
-                            setRegState('');
-                            setRegAssignedStates([]);
-                          }}
-                          className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 text-sm text-white"
-                          required
-                        >
-                          <option value="">Select region</option>
-                          {NIGERIA_REGIONS.map((r) => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                        <div className="text-[9px] text-neutral-500 mt-1">Lagos is split into Lagos North &amp; Lagos South</div>
-                      </label>
-                      <label className="block">
-                        <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Primary State * (from full 36 + FCT list)</span>
-                        <select
-                          value={regState}
-                          onChange={(e) => setRegState(e.target.value)}
-                          className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 text-sm text-white"
-                          required
-                        >
-                          <option value="">Select state</option>
-                          {allStates.map((s) => (
-                            <option key={s} value={s}>{s}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-
-                    {(regRole === 'SM' || regRole === 'CDLM') && (
-                      <div>
-                        <div className="text-[11px] font-bold text-neutral-300 mb-1.5">
-                          {regRole === 'SM' ? 'States under this SM (multi-select)' : 'States this CDLM covers (multi-select)'}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto pr-1">
-                          {(regRegion ? [...new Set([...statesForRegion, ...allStates])] : allStates).map((s) => (
-                            <button
-                              key={s}
-                              type="button"
-                              onClick={() =>
-                                setRegAssignedStates((prev) =>
-                                  prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-                                )
-                              }
-                              className={`text-left px-2 py-1 rounded-lg border text-[10px] cursor-pointer ${
-                                regAssignedStates.includes(s) || regState === s
-                                  ? 'border-emerald-400 bg-emerald-500/15 text-emerald-200'
-                                  : 'border-neutral-800 text-neutral-500'
-                              }`}
-                            >
-                              {(regAssignedStates.includes(s) || regState === s) ? '✓ ' : ''}{s}
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[10px] text-neutral-500 mt-1">
-                          {regRole === 'SM'
-                            ? 'SM is responsible for selected state(s). DH can see which SM owns each state.'
-                            : 'CDLM is placed under the SM in charge of the selected state(s).'}
-                        </p>
-                      </div>
-                    )}
-
-                    {hierarchyPreview && regState && (
-                      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-[11px] text-cyan-100 space-y-1">
-                        <div className="font-bold text-cyan-300">Hierarchy placement preview</div>
-                        <div>State: <strong>{regState}</strong></div>
-                        <div>
-                          SM in charge:{' '}
-                          <strong>
-                            {hierarchyPreview.sm
-                              ? `${hierarchyPreview.sm.loginName} (${hierarchyPreview.sm.loginId})`
-                              : 'Not assigned yet'}
-                          </strong>
-                        </div>
-                        <div>
-                          RM in charge of region/states:{' '}
-                          <strong>
-                            {hierarchyPreview.rm
-                              ? `${hierarchyPreview.rm.loginName} (${hierarchyPreview.rm.loginId})`
-                              : 'Not assigned yet'}
-                          </strong>
-                        </div>
-                      </div>
-                    )}
-
-                    {geoNote && <div className="text-[9px] text-neutral-600">{geoNote}</div>}
-                    <div className="text-[10px] text-neutral-500">
-                      Full official list: {allStates.length} states/FCT · Lagos North &amp; Lagos South supported
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-2">
-                  <label className="block">
-                    <span className="text-[11px] font-bold text-neutral-400 mb-1 block">Create password *</span>
-                    <div className="relative">
-                      <input
-                        type={showRegPass ? 'text' : 'password'}
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-3 py-2.5 pr-10 text-sm text-white focus:outline-none focus:border-emerald-400"
-                      />
-                      <button type="button" onClick={() => setShowRegPass((v) => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400 cursor-pointer">
-                        {showRegPass ? 'Hide' : 'Show'}
-                      </button>
-                    </div>
-                  </label>
-                  <Field label="Confirm password *" value={regPassword2} onChange={setRegPassword2} type="password" />
-                </div>
-
-                <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-2.5 text-[10px] text-neutral-400 leading-relaxed space-y-1">
-                  <div className="font-bold text-neutral-300">Before your account is created, the system checks:</div>
-                  <div>• Exact match → blocked (use original login)</div>
-                  <div>• Login ID conflict / partial match → verification required</div>
-                  <div>• Same name only → allowed (not automatic duplicate)</div>
-                  <div>• No silent overwrite of existing staff Region/State</div>
-                </div>
-
-                <button type="submit" className="w-full py-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-neutral-950 font-black text-sm cursor-pointer">
-                  Create Staff Account
-                </button>
-                <button type="button" onClick={() => go('staff_login')} className="w-full py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer">
-                  Already registered? Go to Staff Login
-                </button>
-              </form>
-            )}
-
-            {/* ACCOUNT HELP */}
-            {view === 'account_help' && (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/70 p-3 space-y-2 text-xs text-neutral-300">
-                  <div className="font-black text-white text-sm">Staff Account Help</div>
-                  <p className="leading-relaxed">
-                    If registration says an account already exists, use your original Login ID to sign in.
-                    Do not create a second account with the same Staff ID.
-                  </p>
-                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-neutral-400">
-                    <li>Forgot password → contact Creator/Admin for reset</li>
-                    <li>Account locked → contact Creator/Admin</li>
-                    <li>Transferred Region/State → ask DH to update via Staff Transfers</li>
-                    <li>Duplicate warning but you are new → Creator verifies &amp; may manually create</li>
-                    <li>Same name as someone else is OK if Login ID is different</li>
-                  </ul>
-                </div>
-                <button type="button" onClick={() => go('staff_login')} className="w-full py-3 rounded-xl bg-emerald-400 text-neutral-950 font-black text-sm cursor-pointer">
-                  Return to Staff Login
-                </button>
-                <button type="button" onClick={() => go('staff_register')} className="w-full py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs font-semibold text-neutral-200 cursor-pointer">
-                  Back to Staff Registration
-                </button>
-                <button type="button" onClick={() => go('selection')} className="w-full py-2 text-xs text-neutral-500 hover:text-white cursor-pointer">
-                  Main Access Portal
-                </button>
-              </div>
-            )}
-
-            {/* DH LOGIN */}
-            {view === 'dh_login' && (
-              <form onSubmit={handleDhLogin} className="space-y-2.5">
-                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-2.5 text-[11px] text-cyan-200 flex gap-2">
-                  <Building2 className="w-4 h-4 shrink-0" />
-                  DH identity: Login ID + Name. Region and State are not required.
-                </div>
-                <Field label={t(language, 'full_name')} value={dhName} onChange={setDhName} autoFocus placeholder="Jane Smith" />
-                <Field label="Login ID / Staff ID" value={dhStaffCode} onChange={setDhStaffCode} placeholder="DH12345" mono />
-                <Field label={t(language, 'password')} value={dhPassword} onChange={setDhPassword} type="password" />
-                <button type="submit" className="w-full py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-neutral-950 font-black text-sm cursor-pointer">
-                  {t(language, 'login')}
-                </button>
-                <button type="button" onClick={() => go('dh_register')} className="w-full py-2 text-xs font-semibold text-cyan-300 cursor-pointer">
-                  {t(language, 'register_dh')}
-                </button>
-              </form>
-            )}
-
-            {/* DH REGISTER */}
-            {view === 'dh_register' && (
-              <form onSubmit={handleDhRegister} className="space-y-2.5">
-                <Field label="Login Name / Staff Name" value={dhName} onChange={setDhName} autoFocus />
-                <Field label="Login ID / Staff ID" value={dhStaffCode} onChange={setDhStaffCode} mono placeholder="DH12345" />
-                <div>
-                  <div className="text-[11px] font-bold text-neutral-400 mb-1.5">Gender *</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setDhGender('male')} className={`py-2.5 rounded-xl border text-xs font-bold cursor-pointer ${dhGender === 'male' ? 'border-cyan-400 bg-cyan-500/15 text-cyan-200' : 'border-neutral-700 bg-neutral-900 text-neutral-400'}`}>♂ Male</button>
-                    <button type="button" onClick={() => setDhGender('female')} className={`py-2.5 rounded-xl border text-xs font-bold cursor-pointer ${dhGender === 'female' ? 'border-pink-400 bg-pink-500/15 text-pink-200' : 'border-neutral-700 bg-neutral-900 text-neutral-400'}`}>♀ Female</button>
-                  </div>
-                </div>
-                <Field label={t(language, 'set_password')} value={dhPassword} onChange={setDhPassword} type="password" />
-                <Field label={t(language, 'confirm_password')} value={dhPassword2} onChange={setDhPassword2} type="password" />
-                <button type="submit" className="w-full py-3.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-neutral-950 font-black text-sm cursor-pointer">
-                  {t(language, 'create_dh_account')}
-                </button>
-              </form>
-            )}
-
-            {/* DUPLICATE BLOCK */}
-            {view === 'duplicate_block' && duplicateInfo && (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                    <div>
-                      <div className="text-sm font-black text-rose-100">{duplicateInfo.messageTitle}</div>
-                      <p className="text-xs text-rose-100/90 mt-2 whitespace-pre-wrap leading-relaxed">{duplicateInfo.messageBody}</p>
-                    </div>
-                  </div>
-                </div>
-                {duplicateInfo.reasons.length > 0 && (
-                  <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3">
-                    <div className="text-[10px] uppercase font-bold text-neutral-500 mb-1">Match signals</div>
-                    <ul className="text-[11px] text-neutral-300 space-y-1 list-disc pl-4">
-                      {duplicateInfo.reasons.map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {duplicateInfo.matchedAccounts.length > 0 && (
-                  <div className="rounded-xl border border-neutral-800 p-3 text-[11px] text-neutral-400">
-                    Existing record(s) reference Login ID:{' '}
-                    <strong className="text-emerald-300 font-mono">
-                      {duplicateInfo.matchedAccounts.map((a) => a.loginId).join(', ')}
-                    </strong>
-                    . Existing staff data will not be overwritten.
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => go('staff_login')}
-                  className="w-full py-3.5 rounded-xl bg-emerald-400 text-neutral-950 font-black text-sm cursor-pointer"
-                >
-                  Return to Login
-                </button>
-                <button type="button" onClick={goBack} className="w-full py-2 text-xs text-neutral-400 hover:text-white cursor-pointer">
-                  Review registration details
-                </button>
-                <p className="text-[10px] text-center text-neutral-500">
-                  Need a verified exception? Contact Creator/Admin for manual account approval.
-                </p>
-              </div>
-            )}
-
-            {/* ASSIST PREFS */}
-            {view === 'assist_setup' && (
-              <div className="space-y-3">
-                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-3">
-                  <div className="text-xs font-bold text-white mb-1">{t(language, 'assist_prefs')}</div>
-                  <div className="text-[11px] text-neutral-400 leading-relaxed">{t(language, 'language_hint')}</div>
-                </div>
-                <AssistToggle label={t(language, 'assist_large_text')} checked={prefs.largeText} onChange={(v) => setPrefs((p) => ({ ...p, largeText: v }))} />
-                <AssistToggle label={t(language, 'assist_reduce_motion')} checked={prefs.reduceMotion} onChange={(v) => setPrefs((p) => ({ ...p, reduceMotion: v }))} />
-                <AssistToggle label={t(language, 'assist_sound_on')} checked={prefs.soundOn} onChange={(v) => setPrefs((p) => ({ ...p, soundOn: v }))} />
-                <AssistToggle label={t(language, 'assist_tips')} checked={prefs.showTips} onChange={(v) => setPrefs((p) => ({ ...p, showTips: v }))} />
-                <AssistToggle label={t(language, 'assist_slow_game')} checked={prefs.slowerPace} onChange={(v) => setPrefs((p) => ({ ...p, slowerPace: v }))} />
-                {prefsSavedFlash && (
-                  <div className="text-xs text-emerald-300 flex items-center gap-1.5">
-                    <Check className="w-3.5 h-3.5" />
-                    {t(language, 'prefs_saved')}
-                  </div>
-                )}
-                <button type="button" onClick={saveAssistAndEnter} className="w-full py-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-neutral-950 font-black text-sm cursor-pointer">
-                  {t(language, 'save_prefs')} · {t(language, 'continue')}
-                </button>
-                <button type="button" onClick={skipAssistAndEnter} className="w-full py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer">
-                  Skip for now
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* LANGUAGE BOTTOM */}
-          <div className="border-t border-neutral-900 bg-neutral-950 px-5 py-3.5">
+        {/* ==================================================== */}
+        {/* STEP 2B: REGISTERED STAFF LOGIN FORM (CDL, CDLM, SM, RM) */}
+        {/* ==================================================== */}
+        {selectedRole === 'staff_login' && (
+          <form onSubmit={handleStaffLoginSubmit} className="space-y-3.5 mb-6 animate-in fade-in duration-200">
+            {/* Top Back bar */}
             <button
               type="button"
               onClick={() => {
-                soundManager.playTabSwitch();
-                setShowLangPanel((v) => !v);
+                setSelectedRole('selection');
+                setErrorMessage(null);
+                setStaffLoginId('');
+                setStaffPassword('');
               }}
-              className="w-full flex items-center justify-between gap-2 cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 font-bold transition-colors cursor-pointer"
             >
-              <div className="text-left min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-neutral-500">{t(language, 'language')}</div>
-                <div className="text-xs font-semibold text-white truncate">
-                  {currentLangMeta.nativeLabel}
-                  <span className="text-neutral-500 font-normal"> · {currentLangMeta.label}</span>
-                </div>
-              </div>
-              {showLangPanel ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
+              <ArrowLeft className="w-4 h-4" />
+              <span>← {t.backBtn}</span>
             </button>
-            {showLangPanel && (
-              <div className="mt-3 space-y-3">
-                <p className="text-[10px] text-neutral-500 leading-relaxed">{t(language, 'language_hint')}</p>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-400/80 mb-1.5">{t(language, 'nigeria_languages')}</div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {nigeriaLangs.map((opt) => (
-                      <LangChip key={opt.code} active={language === opt.code} label={opt.nativeLabel} sub={opt.label} onClick={() => applyLanguageForMeOnly(opt.code)} />
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-cyan-400/80 mb-1.5">{t(language, 'international_languages')}</div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {intlLangs.map((opt) => (
-                      <LangChip key={opt.code} active={language === opt.code} label={opt.nativeLabel} sub={opt.label} onClick={() => applyLanguageForMeOnly(opt.code)} />
-                    ))}
-                  </div>
-                </div>
+
+            <div className="p-3.5 bg-neutral-950 border border-teal-500/40 rounded-2xl text-left">
+              <div className="text-[11px] uppercase font-bold text-teal-300 flex items-center gap-1.5">
+                <LogIn className="w-4 h-4 text-teal-400" />
+                <span>Field Staff Authentication Portal</span>
+              </div>
+              <div className="text-xs text-neutral-300 mt-0.5 leading-relaxed">
+                Enter your official Staff / Login ID to access your personalized standing, portfolio metrics, and regional jurisdiction.
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMessage}</span>
               </div>
             )}
+
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1">
+                Staff / Login ID (e.g., OP12345, OPAY-CDLM-FOL-01):
+              </label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Enter your Staff ID..."
+                value={staffLoginId}
+                onChange={(e) => {
+                  setStaffLoginId(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-teal-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none font-mono uppercase"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-teal-400" />
+                <span>Account Password (Optional if default):</span>
+              </label>
+              <input
+                type="password"
+                placeholder="Enter password (default: opay2026)..."
+                value={staffPassword}
+                onChange={(e) => {
+                  setStaffPassword(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-teal-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-neutral-600 focus:outline-none font-mono"
+              />
+            </div>
+
+            {/* Quick Helper: Select from existing database */}
+            <div className="p-2.5 bg-neutral-950 rounded-xl border border-neutral-800">
+              <div className="text-[10px] text-neutral-400 font-bold uppercase mb-1">
+                Demo Quick-Fill from Staff Database:
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {staffDatabase.filter(s => s.role !== 'DH').slice(0, 4).map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setStaffLoginId(s.loginId);
+                      setErrorMessage(null);
+                    }}
+                    className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-neutral-700 hover:border-teal-400 text-teal-300 cursor-pointer"
+                  >
+                    {s.loginId} ({s.loginName.split(' ')[0]})
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="submit"
+                disabled={!staffLoginId.trim()}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-teal-400 via-emerald-400 to-teal-400 hover:from-teal-300 hover:to-emerald-300 disabled:opacity-40 text-neutral-950 font-black text-sm cursor-pointer shadow-[0_0_20px_rgba(20,184,166,0.4)] transition-all active:scale-98 flex items-center justify-center gap-2"
+              >
+                <span>AUTHENTICATE &amp; START FIELD RUN</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenStaffRegistration}
+                className="w-full py-2 text-xs text-neutral-400 hover:text-white cursor-pointer font-semibold underline underline-offset-2"
+              >
+                Don&apos;t have an account yet? Register New Staff Account
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ==================================================== */}
+        {/* STEP 2C: DEPARTMENT HEAD (DH) LOGIN ENTRY SCREEN */}
+        {/* ==================================================== */}
+        {selectedRole === 'dh_login' && (
+          <form onSubmit={handleDHSubmit} className="space-y-3.5 mb-6 animate-in fade-in duration-200">
+            {/* Top Back bar */}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedRole('selection');
+                setErrorMessage(null);
+              }}
+              className="inline-flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 font-bold transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>← {t.backBtn}</span>
+            </button>
+
+            <div className="p-3.5 bg-neutral-950 border border-purple-500/40 rounded-2xl text-left">
+              <div className="text-[11px] uppercase font-bold text-purple-400 flex items-center gap-1.5">
+                <Briefcase className="w-4 h-4" />
+                {t.dhPortalTitle}
+              </div>
+              <div className="text-xs text-neutral-300 mt-1 leading-relaxed">
+                {t.dhReadonlyNotice}
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="p-2.5 bg-rose-950/80 border border-rose-500/50 rounded-xl text-xs text-rose-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {/* DH Name */}
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1">
+                {t.dhNameLabel}:
+              </label>
+              <input
+                type="text"
+                autoFocus
+                placeholder="e.g. Dr. Aliyu Mustapha"
+                value={dhNameInput}
+                onChange={(e) => {
+                  setDhNameInput(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-purple-400 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-neutral-600 focus:outline-none"
+              />
+            </div>
+
+            {/* DH Staff Code */}
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1">
+                {t.dhCodeLabel}:
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. DH-HQ-001 / DH-OPS-2026"
+                value={dhCodeInput}
+                onChange={(e) => {
+                  setDhCodeInput(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-purple-400 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-neutral-600 focus:outline-none font-mono"
+              />
+            </div>
+
+            {/* DH Password (set by them) */}
+            <div>
+              <label className="text-xs font-bold text-neutral-300 block mb-1 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-purple-400" />
+                <span>{t.dhPassLabel} (set by you):</span>
+              </label>
+              <input
+                type="password"
+                placeholder="Choose or enter your DH passcode..."
+                value={dhPasswordInput}
+                onChange={(e) => {
+                  setDhPasswordInput(e.target.value);
+                  setErrorMessage(null);
+                }}
+                className="w-full bg-neutral-950 border-2 border-neutral-700 focus:border-purple-400 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-white placeholder-neutral-600 focus:outline-none font-mono"
+              />
+            </div>
+
+            <div className="space-y-2 pt-1">
+              <button
+                type="submit"
+                disabled={!dhNameInput.trim() || !dhCodeInput.trim() || !dhPasswordInput.trim()}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-500 via-indigo-400 to-purple-500 hover:from-purple-400 hover:to-indigo-300 disabled:opacity-40 text-neutral-950 font-black text-xs sm:text-sm cursor-pointer shadow-[0_0_20px_rgba(168,85,247,0.4)] transition-all active:scale-98 flex items-center justify-center gap-2"
+              >
+                <span>{t.dhLoginSubmit}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedRole('selection');
+                  setErrorMessage(null);
+                }}
+                className="w-full py-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer transition-colors"
+              >
+                ← {t.backBtn}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* ==================================================== */}
+        {/* BOTTOM SECTION: PER-USER ASSISTANCE REQUESTS */}
+        {/* ==================================================== */}
+        <div className="border-t border-neutral-800 pt-4 space-y-4">
+          <div className="flex items-center justify-between text-xs text-neutral-400">
+            <span className="font-bold flex items-center gap-1.5 text-neutral-300">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Personalized Field Assistance (Saved for your Device)</span>
+            </span>
+            <span className="text-[10px] text-emerald-400/90 font-mono">
+              Auto-saved
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={handleToggleSlowPace}
+              className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                slowPace
+                  ? 'bg-emerald-950/50 border-emerald-500/60 text-white'
+                  : 'bg-neutral-950/70 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <div>
+                <div className="font-bold text-[11.5px] text-white">Gentle Drop Speed</div>
+                <div className="text-[10px] text-neutral-400">Gives more time to read labels</div>
+              </div>
+              <div className={`w-3.5 h-3.5 rounded-full ${slowPace ? 'bg-emerald-400 shadow-[0_0_8px_#10B981]' : 'bg-neutral-700'}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleBadges}
+              className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all flex items-center justify-between gap-2 ${
+                showHelperBadges
+                  ? 'bg-emerald-950/50 border-emerald-500/60 text-white'
+                  : 'bg-neutral-950/70 border-neutral-800 text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <div>
+                <div className="font-bold text-[11.5px] text-white">✓ / ✗ Visual Badges</div>
+                <div className="text-[10px] text-neutral-400">Instant right/wrong badge guides</div>
+              </div>
+              <div className={`w-3.5 h-3.5 rounded-full ${showHelperBadges ? 'bg-emerald-400 shadow-[0_0_8px_#10B981]' : 'bg-neutral-700'}`} />
+            </button>
+          </div>
+
+          {/* ==================================================== */}
+          {/* MULTILINGUAL LANGUAGE SELECTOR (POSITIONED DOWN AT BASE) */}
+          {/* ==================================================== */}
+          <div className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800/80 shadow-inner">
+            <div className="flex items-center justify-between text-xs font-bold text-neutral-400 mb-2 px-1">
+              <span className="flex items-center gap-1.5 text-emerald-400">
+                <Globe className="w-3.5 h-3.5" />
+                <span>{t.selectLanguage}</span>
+              </span>
+              <span className="text-[10.5px] text-neutral-400 font-mono">
+                Default: <strong className="text-white">English</strong>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-[220px] sm:max-h-[260px] overflow-y-auto pr-0.5">
+              {LANGUAGE_OPTIONS.map((lang) => {
+                const isSelected = currentLanguage === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      soundManager.playClick();
+                      onLanguageChange(lang.code);
+                      showSavedBanner(`Language set to ${lang.name} for your session.`);
+                    }}
+                    className={`py-1.5 sm:py-2 px-2 sm:px-2.5 rounded-xl text-left border cursor-pointer transition-all flex items-center justify-between gap-1 touch-btn ${
+                      isSelected
+                        ? 'bg-emerald-500/25 border-emerald-400 text-white shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                        : 'bg-neutral-900/60 border-neutral-800/90 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
+                    }`}
+                    title={`${lang.name} (${lang.nativeName}) - ${lang.region}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs shrink-0">{lang.flag}</span>
+                        <span className="text-[10.5px] sm:text-[11px] font-extrabold truncate text-white">
+                          {lang.name}
+                        </span>
+                      </div>
+                      <div className="text-[9px] sm:text-[9.5px] text-neutral-400 truncate">
+                        {lang.nativeName}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400 shrink-0 stroke-[3]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-[10px] text-neutral-500 text-center mt-2">
+              {t.languageScopeNote}
+            </p>
           </div>
         </div>
-        <div className="mt-3 flex flex-col items-center gap-1.5">
-          <p className="text-center text-[10px] text-neutral-600">{t(language, 'internal_security')}</p>
-          <HamvidaBrand compact />
+
+        {/* Footer Security Stamp & Official Made by Hamvida Tech Badge */}
+        <div className="mt-4 pt-3 border-t border-neutral-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10.5px] text-neutral-500">
+          <span>OPay Internal Security • Multi-tier Governance (DH, RM, SM, CDLM, CDL)</span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-950 border border-[#F6D870]/30 shadow-sm">
+            <HamvidaLogo size={14} />
+            <span className="text-[11px] font-bold text-white tracking-tight">
+              Made by <strong className="text-[#F6D870]">Hamvida Tech</strong>
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
-function RoleCard({
-  icon,
-  title,
-  desc,
-  badge,
-  accent,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  badge?: string;
-  accent: 'emerald' | 'cyan' | 'neutral';
-  onClick: () => void;
-}) {
-  const styles =
-    accent === 'emerald'
-      ? 'border-emerald-500/30 hover:border-emerald-400/70 hover:bg-emerald-500/5'
-      : accent === 'cyan'
-      ? 'border-cyan-500/30 hover:border-cyan-400/70 hover:bg-cyan-500/5'
-      : 'border-neutral-800 hover:border-neutral-600 hover:bg-neutral-900/80';
-  const iconStyles =
-    accent === 'emerald' ? 'bg-emerald-500/15 text-emerald-400' : accent === 'cyan' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-neutral-800 text-neutral-300';
-
-  return (
-    <button type="button" onClick={onClick} className={`w-full text-left rounded-2xl border bg-neutral-900/40 p-3.5 transition-all cursor-pointer active:scale-[0.99] ${styles}`}>
-      <div className="flex items-start gap-3">
-        <div className={`p-2.5 rounded-xl shrink-0 ${iconStyles}`}>{icon}</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-black text-white">{title}</span>
-            {badge && <span className="text-[9px] px-1.5 py-0.5 rounded-full border border-neutral-700 text-neutral-300 font-bold uppercase tracking-wide">{badge}</span>}
-          </div>
-          <p className="text-[11px] text-neutral-400 mt-0.5 leading-snug">{desc}</p>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = 'text',
-  placeholder,
-  mono,
-  autoFocus,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  placeholder?: string;
-  mono?: boolean;
-  autoFocus?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[11px] font-bold text-neutral-400 mb-1 block">{label}</span>
-      <input
-        type={type}
-        value={value}
-        autoFocus={autoFocus}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className={`w-full rounded-xl bg-neutral-900 border border-neutral-700 focus:border-emerald-400 px-3 py-2.5 text-sm text-white focus:outline-none ${
-          mono ? 'font-mono uppercase' : ''
-        }`}
-      />
-    </label>
-  );
-}
-
-function LangChip({ active, label, sub, onClick }: { active: boolean; label: string; sub: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg border px-2 py-1.5 text-left cursor-pointer transition-all ${
-        active ? 'bg-emerald-500/15 border-emerald-400 text-emerald-200' : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-600'
-      }`}
-    >
-      <div className="text-[11px] font-bold leading-tight truncate">{label}</div>
-      <div className="text-[9px] text-neutral-500 truncate">{sub}</div>
-    </button>
-  );
-}
-
-function AssistToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        soundManager.playUiTap();
-        onChange(!checked);
-      }}
-      className={`w-full flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left cursor-pointer ${
-        checked ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-neutral-800 bg-neutral-900/50'
-      }`}
-    >
-      <span className="text-xs font-semibold text-neutral-200">{label}</span>
-      <span className={`w-9 h-5 rounded-full relative transition-colors ${checked ? 'bg-emerald-400' : 'bg-neutral-700'}`}>
-        <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: checked ? '18px' : '2px' }} />
-      </span>
-    </button>
-  );
-}

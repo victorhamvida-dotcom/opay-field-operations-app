@@ -39,7 +39,6 @@ export const MerchantEncounterModal: React.FC<MerchantEncounterModalProps> = ({
     const chosen = encounter.options[selectedOptionIndex];
 
     if (chosen.isCorrect) {
-      soundManager.playRightApproach();
       soundManager.playDisbursementCash();
       confetti({
         particleCount: 50,
@@ -47,7 +46,7 @@ export const MerchantEncounterModal: React.FC<MerchantEncounterModalProps> = ({
         origin: { y: 0.7 },
       });
     } else {
-      soundManager.playWrongApproach();
+      soundManager.playHit();
     }
   };
 
@@ -76,8 +75,8 @@ export const MerchantEncounterModal: React.FC<MerchantEncounterModalProps> = ({
   const selectedChoice = selectedOptionIndex !== null ? encounter.options[selectedOptionIndex] : null;
 
   return (
-    <div className="modal-layer">
-      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-xl modal-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-xl max-h-[95vh] max-h-[95dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-950 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -100,7 +99,7 @@ export const MerchantEncounterModal: React.FC<MerchantEncounterModalProps> = ({
         </div>
 
         {/* Merchant Dossier Card */}
-        <div className="p-3 sm:p-4 overflow-y-auto space-y-3.5 modal-card-body">
+        <div className="p-4 overflow-y-auto space-y-3.5">
           <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-3.5">
             <div className="flex items-start justify-between gap-2 mb-2">
               <div>

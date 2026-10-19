@@ -1,217 +1,140 @@
 # OPay Field Operations App
+### Official CDL Policy, Merchant Loan Disbursement & National Audit Simulator
+**Engineered & Developed by Hamvida Tech** • *Lead Architect: Hamzat Victor Chisom*
 
-**Made by [Hamvida Tech](https://github.com/victorhamvida-dotcom)**  
-Creator: **Hamzat Victor Chisom**
-
-Internal field-training platform for OPay Channel Development operations:
-
-- CDL policy & tiering (4 tiers / 12 sub-levels)
-- Merchant loan disbursement tactics
-- POS deployment quality simulation
-- Staff registration + duplicate control
-- DH regional analytics, transfers, gender insights
-- Multi-game catalog with policy→game recommendations
-- Version history / rollback time machine
+![Hamvida Tech](https://img.shields.io/badge/Made%20by-Hamvida%20Tech-F6D870?style=for-the-badge&logoColor=141724)
+![OPay Brand](https://img.shields.io/badge/OPay-Field%20Operations-1DCE9F?style=for-the-badge)
+![License](https://img.shields.io/badge/License-Proprietary-blue?style=for-the-badge)
+![Status](https://img.shields.io/badge/Deployment-Production%20Ready-emerald?style=for-the-badge)
 
 ---
 
-## Live demo
+## 1. Executive Summary
 
-After deploy, production URL should resemble:
+The **OPay Field Operations App** is an interactive enterprise training and simulation suite designed to operationalize the **New August 2026 OPay Channel Development Lead (CDL) Tiering Policy** and consolidate the field-tested methodologies of **6 high-performing Channel Development Lead Managers (CDLMs)**.
 
-```text
-https://opay-field-operations-app.vercel.app
-```
-
-Or your claimed Vercel production domain under `victorhamvida-dotcom`.
+Unlike static multiple-choice tests or unrealistic drop games, this system trains officers to master **real Nigerian market storming**, merchant cash-flow underwriting, VFO readiness preparation, and compliance discipline.
 
 ---
 
-## Quick start (local)
+## 2. Core Pillars of the Simulation
 
-```bash
-npm install
-npm run dev
-```
+The application mathematically tracks and trains officers across the **4 PEAK Pillars**:
 
-Build production single-file bundle:
+$$\text{Tier Advancement} = \text{POS Volume} + \text{POS Quality} + \text{Loan Performance} + \text{Compliance}$$
 
-```bash
-npm run build
-```
-
-Output: `dist/index.html` (fully inlined CSS/JS via `vite-plugin-singlefile`).
-
-Preview build:
-
-```bash
-npm run preview
-```
+1. **POS Volume**: Qualifying terminals bound $> 30$ days with active transaction turnover.
+2. **POS Quality**:
+   - **Standard Ratio**: POS generating $\ge$ ₦920/month.
+   - **Excellent Ratio**: POS generating $\ge$ ₦1,400/month.
+3. **Loan Performance**: 3-month rolling monthly average of verified merchant credit disbursements.
+4. **Compliance & Integrity**: Zero tolerance for artificial volume stacking, ghost kiosks, or unauthorized kickback extortion.
 
 ---
 
-## Access roles
+## 3. The 7 Official Simulation Game Formats
 
-| Role | How to enter | Powers |
-|------|----------------|--------|
-| **Creator** | Password only: `77075107` | Full admin, staff registry, password reset, Game Studio, versions |
-| **Staff** | Login ID + password (register with role fields) | Field simulator / training |
-| **DH** | Login ID + name + password (no Region/State required) | Analytics, transfers, gender, Game Studio suggestions |
-| **Guest** | One tap | Try simulator without staff account |
+The platform features **7 distinct, playable operational training formats** tailored to different field scenarios:
 
-> Creator password is for internal demo/admin only. Rotate before wide production release.
-
----
-
-## Staff registration rules
-
-### Normal staff (CDL / CDLM / SM)
-Requires:
-1. Login ID / Staff ID  
-2. Login Name  
-3. Gender (Male/Female)  
-4. Region  
-5. State (full 36 + FCT picker)
-
-### RM
-- Login ID + Name + Gender  
-- Multi Region / multi State assignments  
-- Optional supervised RM IDs  
-
-### DH
-- Login ID + Name + Gender only  
-- **No Region/State required**
-
-### Duplicate protection
-- Exact match → blocked  
-- Login ID conflict / partial strong match → verification required  
-- Same name alone → allowed  
-- No silent overwrite of existing Region/State  
-
-Creator can manually create verified exceptions (never overwrites existing Login ID).
+| # | Game Format | Mode Category | Operational Focus | Key Skills Tested |
+|---|---|---|---|---|
+| **1** | **3D Market Stormer Run** | *Action Runner* | Endless 3-lane street sprint dodging traps and catching compliant loan bundles | Field reflexes, whitelist prioritization, obstacle evasion |
+| **2** | **Merchant Credit Dossier Desk** | *Deep Underwriting* | Tactical underwriting desk (Papers & Credit style) with CAC & tenancy checking | Cash flow validation, lease verification, capacity underwriting |
+| **3** | **Disciplinary Tribunal Survival** | *Crisis Court* | High-stakes Section 8 compliance court with 4 official policy resolution options | Warning Tier remediation, audit defense, career resolution |
+| **4** | **24-Hour Quota Blitz** | *Speed Time-Attack* | High-pressure rapid-fire credit allocation in 15-second windows | Quota velocity, turnaround efficiency, decision speed |
+| **5** | **POS Territory & Grid Empire** | *Strategy & Math* | Interactive territory deployment mapping Potential, Standard, and Excellent ratios | Ratio optimization, route mapping, tier milestone planning |
+| **6** | **Sales Pitch & Objection Duel** | *Roleplay Duel* | Dialogue battle against authentic Nigerian market merchant archetypes | Objection handling, merchant psychology, trust building |
+| **7** | **VFO Forensic Document Scanner** | *Forensic Audit* | Pre-VFO quality controller inspecting utility bills, tenancy agreements, and CAC seals | Forgery detection, KYC compliance, rejection prevention |
 
 ---
 
-## Geography
+## 4. Policy AI Synthesizer & Game Recommendation Engine
 
-- Official **36 states + FCT** list for pickers  
-- Lagos operational split: **Lagos North** & **Lagos South**  
-- Daily geography update check (merges new states if remote config appears; never deletes)  
-
----
-
-## Hierarchy
-
-```text
-DH → RM → SM → CDLM → CDL → Merchant
-```
-
-DH tools:
-- Regional performance analytics  
-- Staff Region/State transfer (audited)  
-- SM/RM map by state  
-- Gender workforce analytics  
-- Game Studio (SOP → recommended game type)
+Authorized **Creators** and **Department Heads (DH)** can paste any raw SOP, memo, or directive text:
+- **Intelligent NLP Parsing**: Automatically generates playable in-game drop cards, cash amounts, and policy violation traps.
+- **Dynamic Game Recommendation**: Calculates compatibility match scores across all 7 formats (e.g. *98% Match for Market Stormer*).
+- **Two Deployment Options**:
+  - `[UPGRADE ACTIVE GAME]`: Injects new directives without resetting active session progress.
+  - `[START NEW GAME]`: Deploys a clean field run with new rules.
+- **Creator Studio**: Allows the Creator (**Hamzat Victor Chisom**) to build, configure, and register brand-new game formats directly into the platform catalog.
 
 ---
 
-## Game platform (7+ types)
+## 5. Real-Time Version History & Rollback
 
-1. Career Money Run  
-2. Policy Quiz Arena  
-3. Merchant Case Desk  
-4. POS Tier Climber  
-5. Compliance Gauntlet  
-6. Loan Disbursement Sprint  
-7. Warning & Exit Simulator  
-
-Creator can add more game types.  
-DH pastes SOP/policy → app ranks best existing game types → Start / Upgrade.  
-Version history stores date/time/year and supports rollback.
+Every policy update is logged into an immutable audit timeline:
+- **Real-Time Date**: `DD Month YYYY` (e.g. `24 Oct 2026`).
+- **Real-Time Time**: Exact hour, minute, second with AM/PM (e.g. `04:12:35 PM`).
+- **Calendar Year**: Logged in real time (`2026`).
+- **Author Stamp**: `Hamzat Victor Chisom (Creator)` or `DH Staff (DH)`.
+- **One-Click Rollback (`[ROLLBACK TO THIS VERSION]`)**: Instantly reverts the game to any prior working state if changes cause unintended difficulty.
 
 ---
 
-## Career Run gameplay
+## 6. Enterprise Hierarchy & Governance Architecture
 
-- Human male/female character select  
-- 3-lane money run (temple-run style)  
-- Right answers / clean tactics → wealth up  
-- Wrong answers / traps → wealth down  
-- Failure fates: sacked · merge with big CDL · join BD team · sell & resign  
+The system enforces OPay's 6-tier reporting structure:
 
-Controls:
-- Desktop: `←` `→` or `A` `D` lanes · `Space` jump  
-- Mobile: tap left/right thirds · center/swipe up jump  
+$$\text{DH} \longrightarrow \text{RM} \longrightarrow \text{SM} \longrightarrow \text{CDLM} \longrightarrow \text{CDL} \longrightarrow \text{Merchant}$$
 
----
+### Department Head (DH) Oversight & Reassignment Power
+- **National Overview**: Aggregates ₦747.9M+ portfolio volume, active merchant counts, and cross-regional NPL rates.
+- **Jurisdiction Relocation Power**: The DH has executive authority to reassign any officer's **Region** and **State** to keep company databases aligned with real-life field deployments.
+- **Complete Visibility**: The DH can see which State Manager (SM) is in charge of each state and which Regional Manager (RM) oversees each territory.
 
-## Deploy
+### Nigerian State Division
+- **Lagos Partitioned**: Formally divided into **Lagos North** and **Lagos South**.
+- **All 36 States + FCT**: Complete reference registry with search filtering to eliminate clerical errors.
+- **Automated Daily Update Check**: A background routine checks once every 24 hours to automatically absorb future state creations without requiring software rebuilds.
 
-### Vercel (recommended)
-
-```bash
-npm run build
-cd dist
-npx vercel --prod
-```
-
-Project name to use:
-
-```text
-opay-field-operations-app
-```
-
-Desired domain:
-
-```text
-https://opay-field-operations-app.vercel.app
-```
-
-### GitHub Pages
-
-1. Push this repo to `victorhamvida-dotcom/opay-field-operations-app`
-2. Settings → Pages → Deploy from branch `gh-pages` **or** use `dist` via GitHub Action
-3. Because build is single-file, you can also copy `dist/index.html` to `docs/index.html` and set Pages source to `/docs`
-
-### Netlify Drop
-
-Upload the `dist` folder to [https://app.netlify.com/drop](https://app.netlify.com/drop).
+### Gender Diversity & Performance Intelligence
+- Accessible to Creator and DH.
+- Displays demographic headcount ratios (**Male Officers 👨🏾‍💼 vs. Female Officers 👩🏾‍💼**) with progress bars.
+- Evaluates gender-based performance: disbursed volume, average score, and compliance audit pass rates.
 
 ---
 
-## Project structure
+## 7. Staff Registration & Duplicate Account Control
 
-```text
-src/
-  App.tsx
-  components/          # UI, auth, game, DH, Creator tools
-  types/               # staff registry, geography, game catalog/versioning
-  i18n/                # multi-language login packs
-  utils/               # sound + browser compatibility
-public/brand/          # optional external brand assets
-dist/index.html        # production single-file build
-```
+- **Normal Staff (`CDL`, `CDLM`, `SM`)**: Requires 4 fields: `Login ID` + `Login Name` + `Region` + `State`.
+- **Department Head (`DH`)**: Requires only `Login ID` and `Login Name` (Region and State are omitted).
+- **Regional Manager (`RM`)**: Supports multi-region, multi-state, and supervised RM assignments.
+- **Intelligent Duplicate Prevention**:
+  - Exact match of all 4 fields is blocked with `«Existing Account Found»`.
+  - Same name with different Staff IDs is legitimately allowed (name alone is never treated as duplicate).
+  - Strong ID conflicts with mismatched details are flagged for verification.
+  - Creator/Admin manual override is available for verified legitimate exceptions.
 
 ---
 
-## Documentation index
+## 8. Multilingual Architecture
 
-- [DEPLOY_AND_SHARE.md](./DEPLOY_AND_SHARE.md) — share with boss / field teams  
-- [docs/USER_GUIDE.md](./docs/USER_GUIDE.md) — how each role uses the app  
-- [docs/CREATOR_ADMIN.md](./docs/CREATOR_ADMIN.md) — Creator controls  
-- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) — technical overview  
+Supports **English (Default)** alongside 8 major Nigerian trade dialects and international business tongues:
+- **English (`en`)** *(Default)*
+- **Naija Pidgin (`pcm`)**
+- **Èdè Yorùbá (`yo`)**
+- **Harshen Hausa (`ha`)**
+- **Asụsụ Igbo (`ig`)**
+- **Pulaar / Fulfulde (`ff`)**
+- **Kanuri (`kn`)**
+- **Tiv (`tiv`)**
+- **Ibibio / Efik (`efi`)**
+- **Français (`fr`)**
+- **Español (`es`)**
+- **中文 - 普通话 (`zh`)**
+
+*Language preferences are stored locally on each user's device and do not affect other users.*
 
 ---
 
-## Security notes
+## 9. Brand Identity & Signature
 
-- Demo auth/storage is browser `localStorage` (suitable for training prototype)
-- For enterprise production: move staff registry, passwords, and versioning to a real backend + hashed credentials
-- Do not publish Creator password publicly
+- **Author / Lead Architect**: Hamzat Victor Chisom
+- **Engineering Company**: **Hamvida Tech**
+- **Corporate Client**: OPay Digital Services Nigeria
+- **Creator Passcode**: `77075107`
+- **Recommended Vercel Domain**: `opay-field-operations-app.vercel.app`
 
 ---
 
-## License / ownership
-
-© Hamvida Tech · Built for OPay field operations training use.  
-GitHub: [victorhamvida-dotcom](https://github.com/victorhamvida-dotcom)
+*Made with pride by **Hamvida Tech** for OPay Digital Services Nigeria.*

@@ -113,7 +113,7 @@ export const PasswordResetPortal: React.FC<PasswordResetPortalProps> = ({ onClos
     if (!selectedUser) return;
     const finalPassword = isRandom ? generateSecureTempPassword() : (customPassword.trim() || generateSecureTempPassword());
 
-    soundManager.playPasswordReset();
+    soundManager.playCollect(1.3);
 
     const updated = accounts.map((acc) => {
       if (acc.id === selectedUser.id) {
@@ -139,19 +139,14 @@ export const PasswordResetPortal: React.FC<PasswordResetPortalProps> = ({ onClos
     setResetSuccessNotice(`Password reset successfully for ${selectedUser.name}! Temporary Key: ${finalPassword}`);
   };
 
-  const copyToClipboard = async (text: string) => {
-    const { copyText } = await import('../utils/browserCompat');
-    const ok = await copyText(text);
-    alert(
-      ok
-        ? `Copied temporary credentials.\nReady to dispatch to CDL via official WhatsApp group.`
-        : 'Copy failed on this browser. Please note the temporary password manually.'
-    );
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard?.writeText(text);
+    alert(`Copied temporary credentials: ${text}\nReady to dispatch to CDL via official WhatsApp group.`);
   };
 
   return (
-    <div className="modal-layer">
-      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-3xl modal-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-3xl max-h-[95vh] max-h-[95dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         
         {/* Creator / Supervisor Admin Header */}
         <div className="p-4 border-b border-neutral-800 bg-neutral-950 flex items-center justify-between">
@@ -198,7 +193,7 @@ export const PasswordResetPortal: React.FC<PasswordResetPortalProps> = ({ onClos
         )}
 
         {/* Content Body: Left User Directory, Right Actions */}
-        <div className="p-3 sm:p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-4 modal-card-body">
+        <div className="p-4 overflow-y-auto grid grid-cols-1 md:grid-cols-12 gap-4">
           
           {/* Left Column: CDL User Directory (5 cols) */}
           <div className="md:col-span-5 space-y-3">

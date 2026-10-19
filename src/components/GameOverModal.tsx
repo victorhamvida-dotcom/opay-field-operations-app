@@ -35,16 +35,15 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({
   };
   const ptsPerMin = stats.elapsedSeconds > 5 ? Math.round(stats.score / (stats.elapsedSeconds / 60)) : stats.score;
 
-  const handleCopySummary = async () => {
+  const handleCopySummary = () => {
     const text = `OPay Field Ops Report: I finished as CDL [${stats.cdlTier}] with ₦${stats.cashDisbursed.toLocaleString()} disbursed loan volume and ${stats.score.toLocaleString()} PTS (${stats.tacticsProgress}/6 CDLM Tactics Mastered). Mastered FMCG screening and VFO readiness!`;
-    const { copyText } = await import('../utils/browserCompat');
-    const ok = await copyText(text);
-    alert(ok ? 'Field performance report copied to clipboard!' : 'Copy failed. Please screenshot or write down your score.');
+    navigator.clipboard?.writeText(text);
+    alert('Field performance report copied to clipboard!');
   };
 
   return (
-    <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl flex flex-col justify-center items-center p-3 sm:p-5 z-40 text-white rounded-xl sm:rounded-2xl animate-in fade-in zoom-in-95 duration-200 overflow-y-auto overscroll-contain">
-      <div className="w-full max-w-sm text-center min-w-0">
+    <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl flex flex-col justify-center items-center p-4 sm:p-5 z-40 text-white rounded-2xl animate-in fade-in zoom-in-95 duration-200 overflow-y-auto">
+      <div className="w-full max-w-sm text-center">
         {/* Status Badge */}
         {isMastered ? (
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-300 text-xs font-bold mb-2 animate-bounce">

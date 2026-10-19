@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { GameCanvas, GameState, GameStats } from './components/GameCanvas';
 import { GameHUD } from './components/GameHUD';
-import { CharacterSelect } from './components/CharacterSelect';
-import { CareerRunCanvas, CareerGameState, FieldQuestion, submitCareerAnswer } from './components/CareerRunCanvas';
-import { FateModal } from './components/FateModal';
-import { PlayableCharacter, RunStats, CharacterId, CareerFate, RICH_LABELS } from './types/careerRun';
+import { StartScreen } from './components/StartScreen';
+import { GameOverModal } from './components/GameOverModal';
 import { HierarchyGuide } from './components/HierarchyGuide';
 import { MerchantEncounterModal } from './components/MerchantEncounterModal';
 import { PolicyQuizModal } from './components/PolicyQuizModal';
@@ -11,22 +10,28 @@ import { LeaderboardModal } from './components/LeaderboardModal';
 import { POSDeploymentHub } from './components/POSDeploymentHub';
 import { AuthModal } from './components/AuthModal';
 import { OPayLogo } from './components/OPayLogo';
-import { HamvidaBrand } from './components/HamvidaBrand';
 import { PasswordResetPortal } from './components/PasswordResetPortal';
-import { FeedbackBoard } from './components/FeedbackBoard';
-import { MusicPlayer } from './components/MusicPlayer';
-import { DHAnalyticsDashboard } from './components/DHAnalyticsDashboard';
-import { CreatorStaffAdmin } from './components/CreatorStaffAdmin';
-import { PolicyGameStudio } from './components/PolicyGameStudio';
-import { migrateLegacyDhAccounts } from './types/staffRegistry';
-import { loadActiveConfig, GameRuntimeConfig } from './types/gameVersioning';
 import { HighScoreEntry } from './types/tactics';
 import { CDLPortfolioState, calculateCDLTier } from './types/cdlFullEngine';
-import { AppLanguage, UserAssistPrefs, defaultPrefs } from './i18n/translations';
-import { DH_SESSION_KEY } from './types/dhAnalytics';
-import { soundManager } from './utils/sound';
-import { storageGet, storageSet, storageRemove, sessionGet, sessionSet } from './utils/browserCompat';
-import { Volume2, VolumeX, Building2, Store, FileQuestion, Trophy, Server, ArrowLeft, ArrowRight, Zap, Award, KeyRound, LogOut, ShieldCheck, MessageSquarePlus, Music2, Users, Sparkles } from 'lucide-react';
+import { soundManager, MusicTrackId } from './utils/sound';
+import { AudioMusicHub } from './components/AudioMusicHub';
+import { BestPracticeDocsModal } from './components/BestPracticeDocsModal';
+import { DHAnalyticsDashboard } from './components/DHAnalyticsDashboard';
+import { StaffRegistrationModal } from './components/StaffRegistrationModal';
+import { CreatorAdminStaffManager } from './components/CreatorAdminStaffManager';
+import { StaffAccount, INITIAL_STAFF_DATABASE } from './types/staffDatabase';
+import { checkDailyNigeriaStateUpdate } from './types/nigeriaStates';
+import { SupportedLanguage } from './types/languages';
+import { CharacterSelectModal } from './components/CharacterSelectModal';
+import { DisciplinaryTribunalModal, PenaltyFateOption } from './components/DisciplinaryTribunalModal';
+import { GenderAnalyticsModal } from './components/GenderAnalyticsModal';
+import { PolicyAIEngineModal } from './components/PolicyAIEngineModal';
+import { PolicyVersionSnapshot, getActivePolicySnapshot } from './types/policyGameEngine';
+import { getSelectedCharacter, RunnerCharacter } from './types/characters';
+import { CompanyBrandingModal } from './components/CompanyBrandingModal';
+import { CompanyBranding, getCompanyBranding } from './types/companyBranding';
+import { HamvidaLogo } from './components/HamvidaLogo';
+import { Volume2, VolumeX, Building2, Store, FileQuestion, Trophy, Server, ArrowLeft, ArrowRight, Zap, Award, KeyRound, LogOut, ShieldCheck, Music, BookOpen, Globe, Sparkles } from 'lucide-react';
 
 const HIGH_SCORES_KEY = 'opay_cdl_merchant_loan_highscores';
 
@@ -65,10 +70,7 @@ export const formatTime = (secs: number) => {
 };
 
 export function App() {
-  const [gameState, setGameState] = useState<CareerGameState>('start');
-  const [selectedCharacter, setSelectedCharacter] = useState<PlayableCharacter | null>(null);
-  const [activeQuestion, setActiveQuestion] = useState<FieldQuestion | null>(null);
-  const [chosenFate, setChosenFate] = useState<CareerFate | null>(null);
+  const [gameState, setGameState] = useState<GameState>('start');
   
   // Real-time CDL Policy Portfolio Engine (Tracking 5 criteria from policy)
   const [portfolio, setPortfolio] = useState<CDLPortfolioState>({
@@ -82,9 +84,8 @@ export function App() {
     warningStrikes: 0,
   });
 
-  const [stats, setStats] = useState<RunStats>({
+  const [stats, setStats] = useState<GameStats>({
     score: 0,
-    wealth: 200000,
     cashDisbursed: 250000,
     tacticsProgress: 0,
     combo: 0,
@@ -95,34 +96,23 @@ export function App() {
     whitelistedHits: 0,
     fraudBlocks: 0,
     elapsedSeconds: 0,
-    distanceM: 0,
-    rightAnswers: 0,
-    wrongAnswers: 0,
-    characterId: 'chioma_hustle',
-    richLevel: 0,
   });
 
-  // Authentication session: null | creator | guest | dh
+  // Selected Language (Igbo, Hausa, Fulani, French, Spanish, English, Mandarin Chinese, Yoruba)
+  const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(() => {
+    return (localStorage.getItem('opay_lang') as SupportedLanguage) || 'en';
+  });
+
+  // Authentication session state: null = not logged in yet, 'creator', 'guest', or 'dh'
   const [authRole, setAuthRole] = useState<'creator' | 'guest' | 'dh' | null>(() => {
-    return (storageGet('opay_auth_role') as 'creator' | 'guest' | 'dh') || null;
+    return (localStorage.getItem('opay_auth_role') as 'creator' | 'guest' | 'dh') || null;
   });
   const [currentUserName, setCurrentUserName] = useState<string>(() => {
-    return storageGet('opay_user_name') || 'Guest Field Officer';
+    return localStorage.getItem('opay_user_name') || 'Guest Field Officer';
   });
   const [dhStaffCode, setDhStaffCode] = useState<string>(() => {
-    try {
-      const s = storageGet(DH_SESSION_KEY);
-      return s ? JSON.parse(s).staffCode || '' : '';
-    } catch {
-      return '';
-    }
+    return localStorage.getItem('opay_dh_code') || 'DH-HQ-001';
   });
-  // Default language is always English until THIS user chooses otherwise
-  const [language, setLanguage] = useState<AppLanguage>(() => {
-    return (sessionGet('opay_session_language') as AppLanguage) || 'en';
-  });
-  const [userPrefs, setUserPrefs] = useState<UserAssistPrefs>(() => defaultPrefs());
-  const [userPrefsKey, setUserPrefsKey] = useState<string>('guest:default');
 
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [showHierarchyGuide, setShowHierarchyGuide] = useState<boolean>(false);
@@ -131,69 +121,144 @@ export function App() {
   const [showPOSHub, setShowPOSHub] = useState<boolean>(false);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [showPasswordReset, setShowPasswordReset] = useState<boolean>(false);
-  const [showStaffAdmin, setShowStaffAdmin] = useState<boolean>(false);
-  const [showGameStudio, setShowGameStudio] = useState<boolean>(false);
-  const [activeGameConfig, setActiveGameConfig] = useState<GameRuntimeConfig>(() => loadActiveConfig());
-  const [showFeedback, setShowFeedback] = useState<boolean>(false);
-  const [showMusicDeck, setShowMusicDeck] = useState<boolean>(false);
   const [highScores, setHighScores] = useState<RankedEntry[]>([]);
   const [unlockedBanner, setUnlockedBanner] = useState<{ title: string; step: number } | null>(null);
+  const [showMusicHub, setShowMusicHub] = useState<boolean>(false);
+  const [showBestPracticeDocs, setShowBestPracticeDocs] = useState<boolean>(false);
+  const [currentMusicTrack, setCurrentMusicTrack] = useState<MusicTrackId>('afrobeat');
+
+  // Character selection state & Tribunal Warning Screen
+  const [selectedCharacter, setSelectedCharacter] = useState<RunnerCharacter>(() => getSelectedCharacter());
+  const [showCharacterSelect, setShowCharacterSelect] = useState<boolean>(false);
+  const [showGenderAnalytics, setShowGenderAnalytics] = useState<boolean>(false);
+  const [showPolicyEngine, setShowPolicyEngine] = useState<boolean>(false);
+  const [companyBranding, setCompanyBranding] = useState<CompanyBranding>(() => getCompanyBranding());
+  const [showBrandingModal, setShowBrandingModal] = useState<boolean>(false);
+  const [activePolicyVersion, setActivePolicyVersion] = useState<string>(() => {
+    return getActivePolicySnapshot().versionId;
+  });
+  const [tribunalTriggered, setTribunalTriggered] = useState<{ active: boolean; reason: string }>({
+    active: false,
+    reason: 'Portfolio Bankruptcy',
+  });
+
+  // Staff Database with Composite Duplicate Integrity (Stored in localStorage)
+  const [staffDatabase, setStaffDatabase] = useState<StaffAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('opay_staff_database_v2');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return INITIAL_STAFF_DATABASE;
+  });
+
+  const [showStaffRegistration, setShowStaffRegistration] = useState<boolean>(false);
+  const [showCreatorAdminManager, setShowCreatorAdminManager] = useState<boolean>(false);
 
   const handleCreatorLogin = (creatorName: string) => {
-    soundManager.unlock();
-    soundManager.playLoginSuccess();
     setAuthRole('creator');
     setCurrentUserName(creatorName);
-    storageSet('opay_auth_role', 'creator');
-    storageSet('opay_user_name', creatorName);
-    // Start a confident creator track
-    setTimeout(() => soundManager.startMusic('gold_tier_groove'), 250);
+    localStorage.setItem('opay_auth_role', 'creator');
+    localStorage.setItem('opay_user_name', creatorName);
   };
 
   const handlePlayAsGuest = () => {
-    soundManager.unlock();
-    soundManager.playUiOpen();
     setAuthRole('guest');
     setCurrentUserName('Guest Field Officer');
-    storageSet('opay_auth_role', 'guest');
-    storageSet('opay_user_name', 'Guest Field Officer');
-    storageRemove(DH_SESSION_KEY);
-    setTimeout(() => soundManager.startMusic('market_pulse'), 250);
+    localStorage.setItem('opay_auth_role', 'guest');
+    localStorage.setItem('opay_user_name', 'Guest Field Officer');
   };
 
-  const handleDHLogin = (dhName: string, staffCode: string) => {
-    soundManager.unlock();
+  const handleSuccessDHLogin = (name: string, code: string) => {
     setAuthRole('dh');
-    setCurrentUserName(dhName);
-    setDhStaffCode(staffCode);
-    storageSet('opay_auth_role', 'dh');
-    storageSet('opay_user_name', dhName);
-    storageSet(DH_SESSION_KEY, JSON.stringify({ name: dhName, staffCode }));
-    setTimeout(() => soundManager.startMusic('compliance_calm'), 250);
+    setCurrentUserName(name);
+    setDhStaffCode(code);
+    localStorage.setItem('opay_auth_role', 'dh');
+    localStorage.setItem('opay_user_name', name);
+    localStorage.setItem('opay_dh_code', code);
+  };
+
+  const handleLanguageChange = (lang: SupportedLanguage) => {
+    setCurrentLanguage(lang);
+    localStorage.setItem('opay_lang', lang);
   };
 
   const handleLogout = () => {
     setAuthRole(null);
-    setDhStaffCode('');
-    storageRemove('opay_auth_role');
-    storageRemove('opay_user_name');
-    storageRemove(DH_SESSION_KEY);
+    localStorage.removeItem('opay_auth_role');
+    localStorage.removeItem('opay_user_name');
   };
 
-  const handleLanguageChange = (lang: AppLanguage) => {
-    // Session-only: does not force language onto other users/devices
-    setLanguage(lang);
-    sessionSet('opay_session_language', lang);
+  // Staff Account Registration & Creator Override Handlers
+  const handleRegisterSuccess = (newAccount: StaffAccount) => {
+    const updated = [newAccount, ...staffDatabase];
+    setStaffDatabase(updated);
+    try {
+      localStorage.setItem('opay_staff_database_v2', JSON.stringify(updated));
+    } catch {}
+
+    // Auto log in as the newly created account
+    setShowStaffRegistration(false);
+    if (newAccount.role === 'DH') {
+      handleSuccessDHLogin(newAccount.loginName, newAccount.loginId);
+    } else {
+      setAuthRole('guest'); // standard operational mode with their name and region
+      setCurrentUserName(`${newAccount.loginName} (${newAccount.role} - ${newAccount.state || newAccount.region})`);
+      localStorage.setItem('opay_auth_role', 'guest');
+      localStorage.setItem('opay_user_name', `${newAccount.loginName} (${newAccount.role} - ${newAccount.state || newAccount.region})`);
+    }
   };
 
-  const handlePrefsSaved = (prefs: UserAssistPrefs, userKey: string) => {
-    setUserPrefs(prefs);
-    setUserPrefsKey(userKey);
-    setLanguage(prefs.language || 'en');
-    soundManager.setSfxEnabled(prefs.soundOn);
-    sessionSet('opay_session_language', prefs.language || 'en');
-    sessionSet('opay_user_prefs_key', userKey);
+  const handleSelectExistingLogin = (account: StaffAccount) => {
+    setShowStaffRegistration(false);
+    if (account.role === 'DH') {
+      handleSuccessDHLogin(account.loginName, account.loginId);
+    } else {
+      setAuthRole('guest');
+      setCurrentUserName(`${account.loginName} (${account.role} - ${account.state || account.region})`);
+      localStorage.setItem('opay_auth_role', 'guest');
+      localStorage.setItem('opay_user_name', `${account.loginName} (${account.role} - ${account.state || account.region})`);
+    }
   };
+
+  const handleCreatorManualAccountCreated = (createdAccount: StaffAccount) => {
+    const updated = [createdAccount, ...staffDatabase];
+    setStaffDatabase(updated);
+    try {
+      localStorage.setItem('opay_staff_database_v2', JSON.stringify(updated));
+    } catch {}
+  };
+
+  // Department Head (DH) Authority: Relocate Staff Region & State
+  const handleUpdateStaffLocation = (staffId: string, newRegion: string, newState: string, auditReason: string) => {
+    const updated = staffDatabase.map((staff) => {
+      if (staff.id === staffId) {
+        return {
+          ...staff,
+          region: newRegion,
+          state: newState,
+          approvalNotes: `DH Location Reassignment (${new Date().toISOString().split('T')[0]}): ${auditReason}`,
+        };
+      }
+      return staff;
+    });
+
+    setStaffDatabase(updated);
+    try {
+      localStorage.setItem('opay_staff_database_v2', JSON.stringify(updated));
+    } catch {}
+  };
+
+  // Daily background update check for Nigerian state count
+  // Runs once a day to ensure newly created states are integrated seamlessly
+  useEffect(() => {
+    try {
+      checkDailyNigeriaStateUpdate();
+    } catch {
+      // Ignored
+    }
+  }, []);
 
   // Sync assessed tier from real-time portfolio equation
   useEffect(() => {
@@ -204,26 +269,15 @@ export function App() {
     }));
   }, [portfolio]);
 
-  // Preserve existing data; migrate legacy DH accounts into unified staff registry
-  // Also run once-daily Nigeria states geography check (36 + FCT; expands if updated)
-  useEffect(() => {
-    migrateLegacyDhAccounts();
-    import('./types/nigeriaGeography').then(({ checkNigeriaGeoUpdateOncePerDay }) => {
-      checkNigeriaGeoUpdateOncePerDay().catch(() => {
-        // offline-safe
-      });
-    });
-  }, []);
-
   // Load high scores
   useEffect(() => {
     try {
-      const saved = storageGet(HIGH_SCORES_KEY);
+      const saved = localStorage.getItem(HIGH_SCORES_KEY);
       if (saved) {
         setHighScores(rankEntries(JSON.parse(saved)));
       } else {
         setHighScores(INITIAL_CDL_LEADERBOARD);
-        storageSet(HIGH_SCORES_KEY, JSON.stringify(INITIAL_CDL_LEADERBOARD));
+        localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(INITIAL_CDL_LEADERBOARD));
       }
     } catch {
       setHighScores(INITIAL_CDL_LEADERBOARD);
@@ -243,82 +297,83 @@ export function App() {
     };
     const updated = rankEntries([newEntry, ...highScores]).slice(0, 10);
     setHighScores(updated);
-    storageSet(HIGH_SCORES_KEY, JSON.stringify(updated));
+    try {
+      localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(updated));
+    } catch {
+      // Ignored
+    }
   };
 
   const handleClearScores = () => {
     setHighScores([]);
-    storageRemove(HIGH_SCORES_KEY);
+    try {
+      localStorage.removeItem(HIGH_SCORES_KEY);
+    } catch {
+      // Ignored
+    }
   };
 
   const toggleSound = () => {
     const next = !soundEnabled;
     setSoundEnabled(next);
-    soundManager.setSfxEnabled(next);
-    if (next) soundManager.playUiTap();
+    soundManager.enabled = next;
+    if (!next) {
+      soundManager.stopMusic();
+    } else if (gameState === 'playing' && currentMusicTrack !== 'off') {
+      soundManager.startMusic(currentMusicTrack);
+    }
+  };
+
+  const handleTrackChange = (track: MusicTrackId) => {
+    setCurrentMusicTrack(track);
+    soundManager.switchTrack(track);
   };
 
   const startGame = () => {
-    soundManager.unlock();
-    soundManager.playUiOpen();
-    setChosenFate(null);
-    setActiveQuestion(null);
-    setGameState('start');
+    setGameState('playing');
     setUnlockedBanner(null);
   };
 
-  const beginRunWithCharacter = (character: PlayableCharacter) => {
-    setSelectedCharacter(character);
-    setStats((prev) => ({
-      ...prev,
-      characterId: character.id,
-      wealth: character.startCash,
-      cashDisbursed: character.startCash,
-      score: 0,
-      tacticsProgress: 0,
-      combo: 0,
-      wrongAnswers: 0,
-      rightAnswers: 0,
-      distanceM: 0,
-      richLevel: 0,
-      cdlTier: 'Bronze 1',
-    }));
-    soundManager.startMusic('field_storm');
-    setGameState('playing');
-  };
-
-  const handleGameOver = useCallback((finalStats: RunStats) => {
+  const handleGameOver = useCallback((finalStats: GameStats) => {
     setStats(finalStats);
-    setActiveQuestion(null);
-    setGameState('fate');
-    soundManager.playGameOver();
+    if (finalStats.terminatedByTribunal) {
+      setTribunalTriggered({
+        active: true,
+        reason: finalStats.tribunalReason || 'Portfolio Bankruptcy',
+      });
+    } else {
+      setGameState('gameover');
+    }
   }, []);
 
-  const handleVictory = useCallback((finalStats: RunStats) => {
-    setStats({ ...finalStats, fate: 'gold_glory' });
-    setActiveQuestion(null);
-    setGameState('victory');
-    soundManager.playVictory();
-    soundManager.startMusic('victory_cashout');
+  const handleUnlockTactic = useCallback((tacticTitle: string, totalUnlocked: number) => {
+    setUnlockedBanner({ title: tacticTitle, step: totalUnlocked });
+    
+    // Reward portfolio upon mastering best practices
     setPortfolio((prev) => ({
       ...prev,
-      recentLoansSold: prev.recentLoansSold + 2,
-      totalEarnings: prev.totalEarnings + finalStats.wealth,
-      complianceScore: Math.min(100, prev.complianceScore + 10),
+      recentLoansSold: prev.recentLoansSold + 1,
+      standardPOS: prev.standardPOS + 5,
+      potentialPOS: prev.potentialPOS + 8,
+      totalEarnings: prev.totalEarnings + 100000,
+      complianceScore: Math.min(100, prev.complianceScore + 5),
+    }));
+
+    setTimeout(() => {
+      setUnlockedBanner(null);
+    }, 4500);
+  }, []);
+
+  const handleStatsUpdate = useCallback((newStats: GameStats) => {
+    setStats((prev) => ({
+      ...newStats,
+      cdlTier: prev.cdlTier, // Kept in sync with portfolio engine
     }));
   }, []);
 
-  const handleStatsUpdate = useCallback((newStats: RunStats) => {
-    setStats(newStats);
-    if (newStats.tacticsProgress > 0 && newStats.tacticsProgress !== stats.tacticsProgress) {
-      setUnlockedBanner({ title: `Checkpoint ${newStats.tacticsProgress}/6`, step: newStats.tacticsProgress });
-      setTimeout(() => setUnlockedBanner(null), 2500);
-    }
-  }, [stats.tacticsProgress]);
-
-  const handleTriggerQuestion = useCallback((q: FieldQuestion) => {
-    setActiveQuestion(q);
-    soundManager.playUiOpen();
+  const handleTriggerEncounter = useCallback(() => {
+    setGameState('paused');
+    setShowMerchantEncounter(true);
   }, []);
 
   const handleEncounterDecision = useCallback((result: {
@@ -417,188 +472,185 @@ export function App() {
     );
   };
 
-  // DH users land on analytics only
-  if (authRole === 'dh') {
-    return (
-      <>
-        <DHAnalyticsDashboard
-          dhName={currentUserName}
-          staffCode={dhStaffCode}
-          language={language}
-          onLogout={handleLogout}
-          onOpenSimulatorObserve={() => {
-            // Observe as guest without losing DH session record — soft switch
-            setAuthRole('guest');
-            storageSet('opay_auth_role', 'guest');
-          }}
-          onOpenGameStudio={() => setShowGameStudio(true)}
-        />
-        {showGameStudio && (
-          <PolicyGameStudio
-            actorRole="DH"
-            actorName={currentUserName}
-            actorId={dhStaffCode}
-            onClose={() => {
-              soundManager.playUiClose();
-              setShowGameStudio(false);
-            }}
-            onConfigActivated={(cfg) => setActiveGameConfig(cfg)}
-          />
-        )}
-      </>
-    );
-  }
-
   return (
-    <div
-      className={`app-shell bg-neutral-950 text-neutral-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-neutral-950 font-sans ${
-        userPrefs.largeText ? 'text-assist-lg' : ''
-      } ${userPrefs.reduceMotion ? 'motion-reduce' : ''}`}
-      data-user-prefs={userPrefsKey}
-      data-slower-pace={userPrefs.slowerPace ? '1' : '0'}
-    >
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col justify-between selection:bg-emerald-500 selection:text-neutral-950 font-sans pb-4">
       {/* Top Navigation */}
-      <header className="border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-md sticky top-0 z-20 app-header-sticky">
-        <div className="max-w-5xl mx-auto safe-px py-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <div className="px-1.5 sm:px-2 py-1 rounded-lg bg-white shadow-[0_0_15px_rgba(29,206,159,0.35)] flex items-center shrink-0">
-              <OPayLogo height={18} variant="dark" className="sm:hidden" />
-              <span className="hidden sm:inline-flex">
-                <OPayLogo height={22} variant="dark" />
-              </span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-extrabold text-[11px] xs:text-xs sm:text-sm tracking-tight text-white truncate">
-                <span className="sm:hidden">OPay Field Operations</span>
-                <span className="hidden sm:inline">OPAY FIELD OPERATIONS APP</span>
+      <header className="border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-md sticky top-0 z-20 safe-top">
+        <div className="max-w-5xl mx-auto px-2 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between gap-1 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 flex-1">
+            <button
+              onClick={() => setShowBrandingModal(true)}
+              className="px-2 py-1 rounded-lg bg-white shadow-[0_0_15px_rgba(29,206,159,0.35)] flex items-center hover:scale-105 transition-transform cursor-pointer"
+              title="Click to customize Company Logo & App Name"
+            >
+              <OPayLogo height={22} variant="dark" customBranding={companyBranding} />
+            </button>
+            <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setShowBrandingModal(true)}>
+              <div className="font-extrabold text-[11px] sm:text-sm tracking-tight text-white truncate flex items-center gap-1.5">
+                <span>{companyBranding.companyName.toUpperCase()}</span>
               </div>
-              <div className="text-[9px] text-violet-300/90 truncate hidden sm:block">
-                Live mode: {activeGameConfig.title}
-              </div>
-              <div className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1.5 min-w-0">
+              <div className="text-[9.5px] sm:text-[10.5px] text-emerald-400 font-semibold flex items-center gap-1 sm:gap-1.5 truncate">
                 {authRole === 'creator' ? (
-                  <span className="flex items-center gap-1 text-amber-300 font-bold bg-amber-500/20 px-1.5 sm:px-2 py-0.5 rounded border border-amber-500/30 truncate max-w-[52vw] sm:max-w-none">
-                    <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" />
-                    <span className="truncate">Creator: {currentUserName}</span>
+                  <span className="inline-flex items-center gap-0.5 text-amber-300 font-bold bg-amber-500/20 px-1.5 py-0.2 rounded border border-amber-500/30 truncate">
+                    <ShieldCheck className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                    Creator: {currentUserName}
                   </span>
                 ) : (
-                  <span className="text-neutral-400 truncate max-w-[52vw] sm:max-w-none">
+                  <span className="text-neutral-400 truncate">
                     User: {currentUserName}
                   </span>
                 )}
                 <span className="hidden md:inline">•</span>
-                <span className="hidden md:inline uppercase tracking-wide text-neutral-500">{language}</span>
+                <span className="hidden md:inline">12 Sub-levels (Aug 2026 Policy)</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar max-w-[48%] sm:max-w-none">
+          {/* Action Tabs with responsive overflow containment */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto py-0.5 max-w-[55vw] sm:max-w-none">
             <button
               onClick={() => setShowPOSHub(true)}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Deploy POS & Improve Tier"
             >
               <Server className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden lg:inline">Deploy POS</span>
+              <span className="hidden sm:inline">Deploy POS</span>
             </button>
 
             <button
               onClick={() => setShowHierarchyGuide(true)}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Hierarchy & Tiers"
             >
               <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden lg:inline">Hierarchy</span>
+              <span className="hidden sm:inline">Hierarchy</span>
+            </button>
+
+            <button
+              onClick={() => setShowBestPracticeDocs(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+              title="CDLM Best Practices & Field Playbook"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Playbook</span>
+            </button>
+
+            <button
+              onClick={() => setShowCharacterSelect(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/50 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-sm"
+              title="Select 3D Runner Character"
+            >
+              <span className="text-xs">🏃🏾</span>
+              <span className="hidden sm:inline">Runner</span>
+            </button>
+
+            <button
+              onClick={() => setShowMusicHub(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 text-teal-300 border border-teal-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 animate-pulse"
+              title="Music & Soundtrack Studio"
+            >
+              <Music className="w-3.5 h-3.5 text-teal-400" />
+              <span className="hidden sm:inline">Music</span>
             </button>
 
             <button
               onClick={() => setShowMerchantEncounter(true)}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0 hidden xs:flex"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Merchant Scenarios"
             >
               <Store className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden lg:inline">Scenarios</span>
+              <span className="hidden sm:inline">Scenarios</span>
             </button>
 
             <button
               onClick={() => setShowQuiz(true)}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Policy Exam"
             >
               <FileQuestion className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden lg:inline">Exam</span>
+              <span className="hidden sm:inline">Exam</span>
             </button>
 
+            {/* Policy AI Synthesizer & Game Control (Accessible to Creator & DH) */}
+            {(authRole === 'creator' || authRole === 'dh') && (
+              <button
+                onClick={() => setShowPolicyEngine(true)}
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-gradient-to-r from-emerald-500/30 to-teal-500/30 hover:from-emerald-500/40 hover:to-teal-500/40 text-emerald-300 border border-emerald-400/60 text-xs font-black flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.3)] animate-pulse"
+                title="Creator & DH Power: Paste Policy & Synthesize Game Rules + Real-Time History Rollback"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Policy AI Engine</span>
+              </button>
+            )}
+
+            {/* Gender Diversity & Performance Analysis (Accessible to Creator & DH) */}
+            {(authRole === 'creator' || authRole === 'dh') && (
+              <button
+                onClick={() => setShowGenderAnalytics(true)}
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                title="Gender Headcount & Performance Analysis"
+              >
+                <span>👩🏾‍💼/👨🏾‍💼</span>
+                <span className="hidden sm:inline">Gender Stats</span>
+              </button>
+            )}
+
+            {/* Company Branding & Logo Settings */}
             <button
-              onClick={() => {
-                soundManager.playUiOpen();
-                setShowMusicDeck(true);
-              }}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
-              title="Music playlist & volumes"
+              onClick={() => setShowBrandingModal(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+              title="Customize Company Logo & Name"
             >
-              <Music2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden lg:inline">Music</span>
+              <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Branding</span>
             </button>
 
-            <button
-              onClick={() => {
-                soundManager.playUiOpen();
-                setShowFeedback(true);
-              }}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
-              title="Leave or review feedback"
-            >
-              <MessageSquarePlus className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden lg:inline">Feedback</span>
-            </button>
-
+            {/* Creator / Admin Override Account Console (Restricted to Creator Role) */}
             {authRole === 'creator' && (
-              <>
-                <button
-                  onClick={() => {
-                    soundManager.playUiOpen();
-                    setShowGameStudio(true);
-                  }}
-                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
-                  title="Policy → Game Studio + Version History"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-violet-300" />
-                  <span className="hidden lg:inline">Game Studio</span>
-                </button>
-                <button
-                  onClick={() => {
-                    soundManager.playUiOpen();
-                    setShowStaffAdmin(true);
-                  }}
-                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
-                  title="Creator / Admin: Staff Registry"
-                >
-                  <Users className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden lg:inline">Staff Admin</span>
-                </button>
-                <button
-                  onClick={() => setShowPasswordReset(true)}
-                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
-                  title="Creator / Admin: Reset CDL Passwords"
-                >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden lg:inline">Reset Pass</span>
-                </button>
-              </>
+              <button
+                onClick={() => setShowCreatorAdminManager(true)}
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border border-amber-500/50 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                title="Creator / Admin: Manual Staff Account Override & Hierarchy Setup"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Staff Override</span>
+              </button>
             )}
 
             <button
+              onClick={() => setShowPasswordReset(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+              title="Creator / Admin: Reset CDL Passwords"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Reset Pass</span>
+            </button>
+
+            <button
               onClick={() => setShowLeaderboard(true)}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Leaderboard"
             >
               <Trophy className="w-3.5 h-3.5 text-amber-400" />
             </button>
 
+            {/* Quick Language Switcher Button in Header */}
+            <button
+              onClick={() => {
+                const order: SupportedLanguage[] = ['en', 'yo', 'ha', 'ig', 'ff', 'fr', 'es', 'zh'];
+                const nextIdx = (order.indexOf(currentLanguage) + 1) % order.length;
+                handleLanguageChange(order[nextIdx]);
+              }}
+              className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-bold text-neutral-200 border border-neutral-700 flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+              title="Cycle Operational Language (English, Yoruba, Hausa, Igbo, Fulfulde, French, Spanish, Chinese)"
+            >
+              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="uppercase text-[10px] font-mono">{currentLanguage}</span>
+            </button>
+
             <button
               onClick={toggleSound}
-              className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 cursor-pointer active:scale-95 transition-all shrink-0"
+              className="p-1.5 sm:p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 cursor-pointer active:scale-95 transition-all"
               title={soundEnabled ? 'Mute Audio' : 'Unmute Audio'}
             >
               {soundEnabled ? (
@@ -610,22 +662,22 @@ export function App() {
 
             <button
               onClick={handleLogout}
-              className="p-2 sm:px-2.5 sm:py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shrink-0"
+              className="p-1.5 sm:px-2 sm:py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 text-xs font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95"
               title="Switch Account / Sign Out"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Exit</span>
+              <span className="hidden sm:inline">Exit</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* Main Game Stage */}
-      <main className="flex-1 flex flex-col items-center justify-start sm:justify-center safe-px py-2 w-full max-w-xl mx-auto relative min-w-0">
+      <main className="flex-1 flex flex-col items-center justify-center px-3 py-1.5 w-full max-w-xl mx-auto relative">
         {/* Floating Unlock Banner */}
         {unlockedBanner && gameState === 'playing' && (
-          <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 z-20 bg-emerald-950/95 border-2 border-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.7)] rounded-xl p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3 animate-bounce">
-            <div className="p-1.5 sm:p-2 rounded-lg bg-emerald-500 text-neutral-950 font-black text-sm shrink-0">
+          <div className="absolute top-16 left-4 right-4 z-20 bg-emerald-950/95 border-2 border-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.7)] rounded-xl p-3 flex items-center gap-3 animate-bounce">
+            <div className="p-2 rounded-lg bg-emerald-500 text-neutral-950 font-black">
               #{unlockedBanner.step}
             </div>
             <div className="flex-1 min-w-0">
@@ -641,265 +693,190 @@ export function App() {
         {(gameState === 'playing' || gameState === 'paused') && (
           <GameHUD
             score={stats.score}
-            cashDisbursed={stats.wealth}
+            cashDisbursed={stats.cashDisbursed}
             tacticsProgress={stats.tacticsProgress}
             combo={stats.combo}
             shields={stats.shields}
             cdlTier={stats.cdlTier}
-            whitelistedHits={stats.rightAnswers}
+            whitelistedHits={stats.whitelistedHits}
             potentialPOS={portfolio.potentialPOS}
             stdRatio={stdRatio}
             excRatio={excRatio}
             elapsedSeconds={stats.elapsedSeconds}
-            onPauseToggle={() => {
-              if (gameState === 'playing') {
-                soundManager.playPause();
-                setGameState('paused');
-              } else {
-                soundManager.playResume();
-                soundManager.startMusic('field_storm');
-                setGameState('playing');
-              }
-            }}
+            onPauseToggle={() => setGameState(gameState === 'playing' ? 'paused' : 'playing')}
             isPaused={gameState === 'paused'}
-            onOpenHierarchyGuide={() => {
-              soundManager.playUiOpen();
-              setShowHierarchyGuide(true);
-            }}
-            onOpenPOSHub={() => {
-              soundManager.playUiOpen();
-              setShowPOSHub(true);
-            }}
-            onOpenQuiz={() => {
-              soundManager.playUiOpen();
-              soundManager.startMusic('compliance_calm');
-              setShowQuiz(true);
-            }}
+            onOpenHierarchyGuide={() => setShowHierarchyGuide(true)}
+            onOpenPOSHub={() => setShowPOSHub(true)}
+            onOpenQuiz={() => setShowQuiz(true)}
           />
         )}
 
         {/* Canvas & Overlay Stack */}
-        <div className="relative game-stage w-full min-w-0">
-          <CareerRunCanvas
-            gameState={gameState === 'fate' ? 'gameover' : gameState}
-            characterId={(selectedCharacter?.id || stats.characterId) as CharacterId}
-            soundEnabled={soundEnabled}
-            onStatsUpdate={handleStatsUpdate}
+        <div className="relative w-full max-w-[480px]">
+          <GameCanvas
+            gameState={gameState}
             onGameOver={handleGameOver}
-            onVictory={handleVictory}
-            onTriggerQuestion={handleTriggerQuestion}
+            onUnlockTactic={handleUnlockTactic}
+            onStatsUpdate={handleStatsUpdate}
+            soundEnabled={soundEnabled}
+            onTriggerEncounter={handleTriggerEncounter}
+            activePolicyVersion={activePolicyVersion}
           />
 
-          {/* Character Select / Start */}
+          {/* Start Screen */}
           {gameState === 'start' && (
-            <CharacterSelect
+            <StartScreen
+              onStartGame={startGame}
+              onOpenHierarchy={() => setShowHierarchyGuide(true)}
+              onOpenLeaderboard={() => setShowLeaderboard(true)}
+              onOpenQuiz={() => setShowQuiz(true)}
+              onOpenMerchantEncounter={() => setShowMerchantEncounter(true)}
+              onOpenPasswordReset={() => setShowPasswordReset(true)}
+              onOpenMusicHub={() => setShowMusicHub(true)}
+              onOpenPlaybook={() => setShowBestPracticeDocs(true)}
+              onOpenCharacterSelect={() => setShowCharacterSelect(true)}
+              onOpenBranding={() => setShowBrandingModal(true)}
+              selectedCharacterName={selectedCharacter.name}
+              soundEnabled={soundEnabled}
+              onToggleSound={toggleSound}
               highScore={highestScoreVal}
-              onConfirm={beginRunWithCharacter}
-              onOpenTactics={() => setShowHierarchyGuide(true)}
+              currentTier={stats.cdlTier}
             />
-          )}
-
-          {/* In-run question gate */}
-          {activeQuestion && gameState === 'playing' && (
-            <div className="absolute inset-0 z-40 bg-neutral-950/90 backdrop-blur-md rounded-xl p-3 sm:p-4 flex flex-col justify-end sm:justify-center">
-              <div className="bg-neutral-900 border border-amber-400/40 rounded-2xl p-4 shadow-2xl max-w-md mx-auto w-full">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 mb-1">Field Decision Gate</div>
-                <h3 className="text-sm font-black text-white mb-3 leading-snug">{activeQuestion.prompt}</h3>
-                <div className="space-y-2">
-                  {activeQuestion.options.map((opt, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        submitCareerAnswer(opt.correct);
-                        setActiveQuestion(null);
-                        if (opt.correct) {
-                          setPortfolio((prev) => ({
-                            ...prev,
-                            recentLoansSold: prev.recentLoansSold + 1,
-                            complianceScore: Math.min(100, prev.complianceScore + 3),
-                          }));
-                        } else {
-                          setPortfolio((prev) => ({
-                            ...prev,
-                            complianceScore: Math.max(0, prev.complianceScore - 8),
-                            warningStrikes: prev.warningStrikes + (opt.correct ? 0 : 0),
-                          }));
-                        }
-                      }}
-                      className="w-full text-left px-3 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 hover:border-emerald-400 text-xs text-neutral-100 cursor-pointer"
-                    >
-                      <span className="font-mono text-emerald-400 mr-2">{String.fromCharCode(65 + idx)}.</span>
-                      {opt.text}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
           )}
 
           {/* Pause Modal */}
-          {gameState === 'paused' && (
+          {gameState === 'paused' && !showMerchantEncounter && (
             <div className="absolute inset-0 bg-neutral-950/85 backdrop-blur-md flex flex-col items-center justify-center p-6 z-30 rounded-2xl text-center">
-              <h2 className="text-xl font-black uppercase text-white mb-1">Run Paused</h2>
-              <p className="text-xs text-neutral-400 mb-5 max-w-xs">Catch your breath. Resume the money lane or open tools.</p>
+              <div className="p-3 rounded-full bg-emerald-500/20 text-emerald-400 mb-3 border border-emerald-500/30">
+                ⏸️
+              </div>
+              <h2 className="text-xl font-black uppercase text-white mb-1">Field Operation Paused</h2>
+              <p className="text-xs text-neutral-400 mb-5 max-w-xs leading-relaxed">
+                Deploy terminals to boost your Standard/Excellent ratios, take the policy exam, or resume market storming.
+              </p>
+
               <div className="flex flex-col gap-2 w-full max-w-xs">
                 <button
-                  onClick={() => {
-                    soundManager.playResume();
-                    soundManager.startMusic('field_storm');
-                    setGameState('playing');
-                  }}
-                  className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-500 text-neutral-950 cursor-pointer"
+                  onClick={() => setGameState('playing')}
+                  className="w-full py-2.5 rounded-xl font-bold text-xs bg-emerald-500 hover:bg-emerald-400 text-neutral-950 cursor-pointer shadow-lg active:scale-95 transition-all"
                 >
-                  ▶ RESUME CAREER RUN
+                  ▶ RESUME DISBURSEMENT RUN
                 </button>
-                <button onClick={() => setShowPOSHub(true)} className="w-full py-2 rounded-xl text-xs bg-neutral-900 border border-neutral-800 text-neutral-300 cursor-pointer">
-                  POS Hub
+                <button
+                  onClick={() => setShowPOSHub(true)}
+                  className="w-full py-2 rounded-xl font-bold text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 cursor-pointer"
+                >
+                  Open POS Deployment &amp; Tier Upgrade Hub
                 </button>
-                <button onClick={() => setGameState('start')} className="w-full py-2 rounded-xl text-xs text-neutral-400 cursor-pointer">
-                  Character Select
+                <button
+                  onClick={() => setShowMusicHub(true)}
+                  className="w-full py-2 rounded-xl font-bold text-xs bg-teal-500/20 text-teal-300 border border-teal-500/40 hover:bg-teal-500/30 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Music className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Soundtrack &amp; Music Player</span>
+                </button>
+                <button
+                  onClick={() => setShowBestPracticeDocs(true)}
+                  className="w-full py-2 rounded-xl font-semibold text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>CDLM Best Practices Playbook</span>
+                </button>
+                <button
+                  onClick={() => setShowHierarchyGuide(true)}
+                  className="w-full py-2 rounded-xl font-semibold text-xs bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                >
+                  Hierarchy &amp; 12 Sub-Levels Guide
+                </button>
+                <button
+                  onClick={() => setShowQuiz(true)}
+                  className="w-full py-2 rounded-xl font-semibold text-xs bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 cursor-pointer"
+                >
+                  Take CDL Policy Exam (Aug 2026)
+                </button>
+                <button
+                  onClick={() => setGameState('start')}
+                  className="w-full py-2 rounded-xl font-semibold text-xs text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  Return to Main Menu
                 </button>
               </div>
             </div>
           )}
 
-          {/* Fate / Victory */}
-          {(gameState === 'fate' || gameState === 'victory') && (
-            <FateModal
+          {/* Game Over Modal */}
+          {gameState === 'gameover' && (
+            <GameOverModal
               stats={stats}
-              victory={gameState === 'victory'}
               onRestart={startGame}
-              onChooseFate={(fate) => {
-                setChosenFate(fate);
-                setStats((prev) => ({ ...prev, fate }));
-                setGameState('gameover');
-              }}
+              onSaveScore={handleSaveScore}
+              onViewHierarchy={() => setShowHierarchyGuide(true)}
+              onViewMerchantEncounters={() => setShowMerchantEncounter(true)}
             />
-          )}
-
-          {gameState === 'gameover' && chosenFate && (
-            <div className="absolute inset-0 z-40 bg-neutral-950/95 backdrop-blur-xl rounded-xl p-4 flex flex-col items-center justify-center text-center">
-              <div className="text-3xl mb-2">
-                {chosenFate === 'sacked' ? '⛔' : chosenFate === 'merge_big_cdl' ? '🤝' : chosenFate === 'join_bd_team' ? '🏢' : '🚪'}
-              </div>
-              <h2 className="text-xl font-black text-white mb-1">
-                {chosenFate === 'sacked'
-                  ? 'Sacked by OPay'
-                  : chosenFate === 'merge_big_cdl'
-                  ? 'Merged with Big CDL'
-                  : chosenFate === 'join_bd_team'
-                  ? 'Joined BD / Direct POS Team'
-                  : 'Sold Merchants & Resigned'}
-              </h2>
-              <p className="text-xs text-neutral-400 max-w-xs mb-2">
-                Final wealth ₦{stats.wealth.toLocaleString()} · {RICH_LABELS[stats.richLevel]} · {stats.distanceM}m · Score {stats.score.toLocaleString()}
-              </p>
-              <p className="text-[11px] text-neutral-500 max-w-sm mb-4">
-                This mirrors real CDL New Policy exit options after Warning-tier collapse or repeated failure.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  handleSaveScore(
-                    selectedCharacter?.name || currentUserName,
-                    stats.score,
-                    stats.tacticsProgress,
-                    stats.cashDisbursed,
-                    stats.cdlTier,
-                    stats.elapsedSeconds
-                  );
-                  startGame();
-                }}
-                className="w-full max-w-sm py-3 rounded-xl bg-emerald-400 text-neutral-950 font-black text-sm cursor-pointer"
-              >
-                Save Run &amp; Choose New Character
-              </button>
-            </div>
           )}
         </div>
 
-        {/* Mobile Touch Controls + Mini Music Deck */}
-        <div className="w-full game-stage mt-2 flex flex-col gap-2 safe-pb">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <button
-                onMouseDown={() => dispatchKey('ArrowLeft', true)}
-                onMouseUp={() => dispatchKey('ArrowLeft', false)}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  dispatchKey('ArrowLeft', true);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  dispatchKey('ArrowLeft', false);
-                }}
-                className="w-12 sm:w-14 h-11 rounded-xl bg-neutral-900 border border-emerald-500/30 text-white flex items-center justify-center font-bold active:bg-emerald-600 transition-colors select-none shadow-md"
-                aria-label="Move Left"
-              >
-                <ArrowLeft className="w-5 h-5 text-emerald-400" />
-              </button>
-
-              <button
-                onMouseDown={() => dispatchKey('ArrowRight', true)}
-                onMouseUp={() => dispatchKey('ArrowRight', false)}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  dispatchKey('ArrowRight', true);
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  dispatchKey('ArrowRight', false);
-                }}
-                className="w-12 sm:w-14 h-11 rounded-xl bg-neutral-900 border border-emerald-500/30 text-white flex items-center justify-center font-bold active:bg-emerald-600 transition-colors select-none shadow-md"
-                aria-label="Move Right"
-              >
-                <ArrowRight className="w-5 h-5 text-emerald-400" />
-              </button>
-            </div>
-
+        {/* Mobile Touch Controls - Ergonomic for 1-hand & 2-hand phone play */}
+        <div className="w-full max-w-[480px] mt-1.5 sm:mt-2 flex items-center justify-between gap-1.5 sm:gap-2 px-1 safe-bottom">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
-              onMouseDown={() => dispatchKey(' ', true)}
-              onMouseUp={() => dispatchKey(' ', false)}
+              onMouseDown={() => dispatchKey('ArrowLeft', true)}
+              onMouseUp={() => dispatchKey('ArrowLeft', false)}
               onTouchStart={(e) => {
                 e.preventDefault();
-                dispatchKey(' ', true);
+                dispatchKey('ArrowLeft', true);
               }}
               onTouchEnd={(e) => {
                 e.preventDefault();
-                dispatchKey(' ', false);
+                dispatchKey('ArrowLeft', false);
               }}
-              className="flex-1 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center gap-1.5 font-bold text-[11px] sm:text-xs active:bg-emerald-500 active:text-neutral-950 transition-all select-none shadow-md cursor-pointer"
-              aria-label="Turbo Dash"
+              className="w-12 sm:w-14 h-10 sm:h-11 rounded-xl bg-neutral-900 border border-emerald-500/30 text-white flex items-center justify-center font-bold active:bg-emerald-600 transition-colors select-none shadow-md touch-btn cursor-pointer"
+              aria-label="Move Left"
             >
-              <Zap className="w-4 h-4 text-amber-400" />
-            <span>JUMP / DASH</span>
-          </button>
-          </div>
+              <ArrowLeft className="w-5 h-5 text-emerald-400" />
+            </button>
 
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="min-w-0 flex-1">
-              <MusicPlayer compact />
-            </div>
             <button
-              onClick={() => {
-                soundManager.playUiOpen();
-                setShowMusicDeck(true);
+              onMouseDown={() => dispatchKey('ArrowRight', true)}
+              onMouseUp={() => dispatchKey('ArrowRight', false)}
+              onTouchStart={(e) => {
+                e.preventDefault();
+                dispatchKey('ArrowRight', true);
               }}
-              className="px-2.5 sm:px-3 h-9 rounded-lg bg-neutral-900 border border-emerald-500/30 text-[10px] sm:text-[11px] font-semibold text-emerald-300 cursor-pointer hover:bg-neutral-800 shrink-0"
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                dispatchKey('ArrowRight', false);
+              }}
+              className="w-12 sm:w-14 h-10 sm:h-11 rounded-xl bg-neutral-900 border border-emerald-500/30 text-white flex items-center justify-center font-bold active:bg-emerald-600 transition-colors select-none shadow-md touch-btn cursor-pointer"
+              aria-label="Move Right"
             >
-              Music Deck
+              <ArrowRight className="w-5 h-5 text-emerald-400" />
             </button>
           </div>
-          <div className="text-[10px] text-center text-neutral-500">
-            Lanes ← → · Jump Space/Center · Get rich with ✓ answers · Wrong answers = poor path / fate options
-          </div>
+
+          <button
+            onMouseDown={() => dispatchKey(' ', true)}
+            onMouseUp={() => dispatchKey(' ', false)}
+            onTouchStart={(e) => {
+              e.preventDefault();
+              dispatchKey(' ', true);
+            }}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              dispatchKey(' ', false);
+            }}
+            className="flex-1 h-10 sm:h-11 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 flex items-center justify-center gap-1.5 font-bold text-xs active:bg-emerald-500 active:text-neutral-950 transition-all select-none shadow-md touch-btn cursor-pointer"
+            aria-label="Turbo Dash"
+          >
+            <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="truncate">TURBO DASH</span>
+          </button>
         </div>
       </main>
 
-      {/* Operational Policy Strip + Company credit */}
-      <footer className="max-w-4xl mx-auto safe-px text-center mt-3 safe-pb">
-        <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] sm:text-[11px] text-neutral-400 compact-landscape-hide mb-3">
+      {/* Operational Policy & Official Hamvida Tech Signature Footer */}
+      <footer className="max-w-4xl mx-auto px-4 text-center mt-2 space-y-1.5">
+        <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-neutral-400">
           <span className="text-emerald-400 font-semibold flex items-center gap-1">
             <Award className="w-3.5 h-3.5 text-emerald-400" />
             Easy Way to Remember:
@@ -908,69 +885,108 @@ export function App() {
             <strong>POS Volume + POS Quality + Loan Performance + Compliance = Tier Advancement!</strong>
           </span>
         </div>
-        <div className="border-t border-neutral-900 pt-3 pb-1">
-          <HamvidaBrand />
+
+        {/* Official "Made by Hamvida Tech" Signature Banner */}
+        <div className="pt-1 flex items-center justify-center gap-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900/90 border border-[#F6D870]/40 shadow-[0_0_15px_rgba(246,216,112,0.15)] hover:border-[#F6D870] transition-colors">
+            <HamvidaLogo size={18} />
+            <span className="text-xs font-extrabold text-white tracking-tight flex items-center gap-1">
+              <span className="text-neutral-400 font-medium">Made by</span>
+              <span className="text-[#F6D870] font-black">Hamvida Tech</span>
+            </span>
+          </div>
         </div>
       </footer>
 
-      {/* Initial Access Gate: Creator / DH / Guest + Language */}
+      {/* Initial Access Gate: Creator vs Registered Staff vs New Registration vs Guest vs DH */}
       {!authRole && (
         <AuthModal
-          language={language}
-          onLanguageChange={handleLanguageChange}
           onSuccessCreatorLogin={handleCreatorLogin}
           onPlayAsGuest={handlePlayAsGuest}
-          onSuccessDHLogin={handleDHLogin}
-          onPrefsSaved={handlePrefsSaved}
+          onSuccessDHLogin={handleSuccessDHLogin}
+          onSuccessStaffLogin={handleSelectExistingLogin}
+          onOpenStaffRegistration={() => setShowStaffRegistration(true)}
+          currentLanguage={currentLanguage}
+          onLanguageChange={handleLanguageChange}
+          staffDatabase={staffDatabase}
         />
       )}
+
+      {/* Staff Registration Modal with Intelligent Duplicate Account Check */}
+      <StaffRegistrationModal
+        isOpen={showStaffRegistration}
+        onClose={() => setShowStaffRegistration(false)}
+        staffDatabase={staffDatabase}
+        onRegisterSuccess={handleRegisterSuccess}
+        onSelectExistingLogin={handleSelectExistingLogin}
+        onContactAdmin={() => {
+          setShowStaffRegistration(false);
+          setShowPasswordReset(true);
+        }}
+      />
+
+      {/* Creator / Admin Manual Override Staff Account Console */}
+      <CreatorAdminStaffManager
+        isOpen={showCreatorAdminManager}
+        onClose={() => setShowCreatorAdminManager(false)}
+        staffDatabase={staffDatabase}
+        onManualAccountCreated={handleCreatorManualAccountCreated}
+      />
+
+      {/* Full Department Head (DH) Performance Oversight & Location Reassignment Dashboard */}
+      {authRole === 'dh' && (
+        <DHAnalyticsDashboard
+          dhName={currentUserName}
+          dhStaffCode={dhStaffCode}
+          staffDatabase={staffDatabase}
+          onUpdateStaffLocation={handleUpdateStaffLocation}
+          onOpenGenderAnalytics={() => setShowGenderAnalytics(true)}
+          onOpenPolicyEngine={() => setShowPolicyEngine(true)}
+          onLogout={handleLogout}
+        />
+      )}
+
+      {/* Gender Diversity & Performance Analysis Modal (Accessible to Creator & DH) */}
+      <GenderAnalyticsModal
+        isOpen={showGenderAnalytics}
+        onClose={() => setShowGenderAnalytics(false)}
+        staffDatabase={staffDatabase}
+        viewerRole={authRole === 'creator' ? 'creator' : 'dh'}
+        viewerName={currentUserName}
+      />
+
+      {/* Policy AI Game Synthesizer, 7 Game Modes & Real-Time History Rollback Modal (Creator & DH) */}
+      <PolicyAIEngineModal
+        isOpen={showPolicyEngine}
+        onClose={() => setShowPolicyEngine(false)}
+        userRole={authRole === 'creator' ? 'Creator' : 'DH'}
+        userName={currentUserName}
+        onApplyNewGameConfig={(snapshot: PolicyVersionSnapshot, isNewGame: boolean) => {
+          setActivePolicyVersion(snapshot.versionId);
+          if (isNewGame) {
+            startGame();
+          }
+        }}
+        onLaunchGameDirectly={(mode) => {
+          setShowPolicyEngine(false);
+          if (mode === 'market_stormer' || mode === 'speed_disbursement') {
+            startGame();
+          } else if (mode === 'merchant_dossier' || mode === 'objection_duel') {
+            setShowMerchantEncounter(true);
+          } else if (mode === 'tribunal_survival') {
+            setTribunalTriggered({ active: true, reason: 'High-Stakes Warning Tier Defense Scenario' });
+          } else if (mode === 'terminal_empire') {
+            setShowPOSHub(true);
+          } else if (mode === 'vfo_forensics') {
+            setShowQuiz(true);
+          } else {
+            startGame();
+          }
+        }}
+      />
 
       {/* Modals */}
-      {showMusicDeck && (
-        <div className="modal-layer">
-          <div className="w-full max-w-md">
-            <MusicPlayer onClose={() => setShowMusicDeck(false)} />
-          </div>
-        </div>
-      )}
-
-      {showFeedback && (
-        <FeedbackBoard
-          isCreator={authRole === 'creator'}
-          currentUserName={currentUserName}
-          onClose={() => {
-            soundManager.playUiClose();
-            setShowFeedback(false);
-          }}
-        />
-      )}
-
-      {showStaffAdmin && authRole === 'creator' && (
-        <CreatorStaffAdmin
-          adminName={currentUserName}
-          onClose={() => {
-            soundManager.playUiClose();
-            setShowStaffAdmin(false);
-          }}
-        />
-      )}
-
-      {showGameStudio && authRole === 'creator' && (
-        <PolicyGameStudio
-          actorRole="Creator"
-          actorName={currentUserName}
-          actorId="creator"
-          onClose={() => {
-            soundManager.playUiClose();
-            setShowGameStudio(false);
-          }}
-          onConfigActivated={(cfg) => {
-            setActiveGameConfig(cfg);
-          }}
-        />
-      )}
-
-      {showPasswordReset && authRole === 'creator' && (
+      {showPasswordReset && (
         <PasswordResetPortal
           onClose={() => setShowPasswordReset(false)}
         />
@@ -980,26 +996,16 @@ export function App() {
         <POSDeploymentHub
           portfolio={portfolio}
           onDeployPOS={handleDeployPOS}
-          onClose={() => {
-            soundManager.playUiClose();
-            setShowPOSHub(false);
-          }}
+          onClose={() => setShowPOSHub(false)}
         />
       )}
 
       {showHierarchyGuide && (
-        <div className="modal-layer">
-          <div className="w-full max-w-3xl modal-card">
-            <div className="modal-card-body p-0">
-              <HierarchyGuide
-                currentTier={stats.cdlTier}
-                onClose={() => {
-                  soundManager.playUiClose();
-                  setShowHierarchyGuide(false);
-                }}
-              />
-            </div>
-          </div>
+        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <HierarchyGuide
+            currentTier={stats.cdlTier}
+            onClose={() => setShowHierarchyGuide(false)}
+          />
         </div>
       )}
 
@@ -1008,12 +1014,8 @@ export function App() {
           currentTier={stats.cdlTier}
           onDecisionMade={handleEncounterDecision}
           onClose={() => {
-            soundManager.playUiClose();
             setShowMerchantEncounter(false);
-            if (gameState === 'paused') {
-              soundManager.startMusic('field_storm');
-              setGameState('playing');
-            }
+            if (gameState === 'paused') setGameState('playing');
           }}
         />
       )}
@@ -1022,11 +1024,7 @@ export function App() {
         <PolicyQuizModal
           currentTier={stats.cdlTier}
           onQuizCompleted={handleQuizCompleted}
-          onClose={() => {
-            soundManager.playUiClose();
-            if (gameState === 'playing') soundManager.startMusic('field_storm');
-            setShowQuiz(false);
-          }}
+          onClose={() => setShowQuiz(false)}
         />
       )}
 
@@ -1035,6 +1033,58 @@ export function App() {
           scores={highScores}
           onClose={() => setShowLeaderboard(false)}
           onClearScores={handleClearScores}
+        />
+      )}
+
+      {/* Audio & Music Soundtrack Studio */}
+      <AudioMusicHub
+        isOpen={showMusicHub}
+        onClose={() => setShowMusicHub(false)}
+        currentTrack={currentMusicTrack}
+        onTrackChange={handleTrackChange}
+        soundEnabled={soundEnabled}
+        onToggleSound={toggleSound}
+      />
+
+      {/* Official CDLM Best Practice Field Playbook */}
+      <BestPracticeDocsModal
+        isOpen={showBestPracticeDocs}
+        onClose={() => setShowBestPracticeDocs(false)}
+      />
+
+      {/* Selectable Character Runner Modal */}
+      <CharacterSelectModal
+        isOpen={showCharacterSelect}
+        onClose={() => setShowCharacterSelect(false)}
+        onSelectCharacter={(char) => {
+          setSelectedCharacter(char);
+          setShowCharacterSelect(false);
+        }}
+      />
+
+      {/* Company Branding & Logo Customizer Modal */}
+      <CompanyBrandingModal
+        isOpen={showBrandingModal}
+        onClose={() => setShowBrandingModal(false)}
+        onUpdateBranding={(newBranding) => {
+          setCompanyBranding(newBranding);
+        }}
+      />
+
+      {/* Disciplinary Warning Tier Tribunal (Section 8 Options Modal) */}
+      {tribunalTriggered.active && (
+        <DisciplinaryTribunalModal
+          score={stats.score}
+          cashDisbursed={stats.cashDisbursed}
+          cdlTier={stats.cdlTier}
+          reason={tribunalTriggered.reason}
+          onSelectResolution={(_fate: PenaltyFateOption, _details: string) => {
+            // Handled inside modal, then player can restart
+          }}
+          onRestartNewCareer={() => {
+            setTribunalTriggered({ active: false, reason: '' });
+            startGame();
+          }}
         />
       )}
     </div>

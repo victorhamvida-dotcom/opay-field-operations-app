@@ -49,44 +49,46 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   if (isGoldTier) tierColor = 'text-amber-400 border-amber-400/40 bg-amber-400/10';
 
   return (
-    <div className="w-full game-stage mx-auto mb-2 select-none min-w-0">
+    <div className="w-full max-w-[480px] mx-auto mb-2 select-none">
       {/* Top HUD Box */}
-      <div className="bg-neutral-900/90 backdrop-blur-md border border-emerald-500/20 rounded-xl p-2.5 sm:p-3 shadow-lg">
+      <div className="bg-neutral-900/90 backdrop-blur-md border border-emerald-500/20 rounded-xl p-3 shadow-lg">
         {/* Tier & Operational buttons */}
-        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-neutral-800">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            <span className="text-[10px] uppercase font-bold text-neutral-400 hidden xs:inline">Field Tier:</span>
-            <div className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-black border truncate ${tierColor}`}>
+        <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] uppercase font-bold text-neutral-400">Field Tier:</span>
+            <div className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${tierColor}`}>
               CDL {cdlTier}
             </div>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={onOpenPOSHub}
-              className="px-1.5 sm:px-2 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] sm:text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+              className="px-2 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
               title="Deploy POS & Improve Tier"
             >
               <Server className="w-3 h-3 text-emerald-400" />
-              <span className="hidden sm:inline">Deploy</span>
+              <span>Deploy POS</span>
             </button>
             <button
               onClick={onOpenHierarchyGuide}
-              className="px-1.5 sm:px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] sm:text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              className="px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
               title="Hierarchy & Tiers"
             >
               <Building2 className="w-3 h-3 text-neutral-400" />
+              <span>Chain</span>
             </button>
             <button
               onClick={onOpenQuiz}
-              className="px-1.5 sm:px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[10px] sm:text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+              className="px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
               title="Policy Exam"
             >
               <FileQuestion className="w-3 h-3 text-neutral-400" />
+              <span>Exam</span>
             </button>
             <button
               onClick={onPauseToggle}
-              className="px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-semibold cursor-pointer transition-colors min-w-[36px]"
+              className="px-2 py-1 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-[11px] font-semibold cursor-pointer transition-colors"
             >
               {isPaused ? '▶' : '⏸'}
             </button>

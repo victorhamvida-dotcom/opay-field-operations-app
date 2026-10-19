@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Play, Trophy, Volume2, VolumeX, Building2, Store, FileQuestion, Sparkles, AlertTriangle, KeyRound, MessageSquarePlus } from 'lucide-react';
+import { Play, Trophy, Volume2, VolumeX, Building2, Store, FileQuestion, Sparkles, AlertTriangle, KeyRound, Music, BookOpen } from 'lucide-react';
 import { CDLSubLevel } from '../types/cdlPolicy';
 import { OPayLogo } from './OPayLogo';
+import { HamvidaLogo } from './HamvidaLogo';
 
 interface StartScreenProps {
   onStartGame: () => void;
@@ -10,7 +11,11 @@ interface StartScreenProps {
   onOpenQuiz: () => void;
   onOpenMerchantEncounter: () => void;
   onOpenPasswordReset: () => void;
-  onOpenFeedback: () => void;
+  onOpenMusicHub: () => void;
+  onOpenPlaybook: () => void;
+  onOpenCharacterSelect: () => void;
+  onOpenBranding?: () => void;
+  selectedCharacterName?: string;
   soundEnabled: boolean;
   onToggleSound: () => void;
   highScore: number;
@@ -24,7 +29,11 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   onOpenQuiz,
   onOpenMerchantEncounter,
   onOpenPasswordReset,
-  onOpenFeedback,
+  onOpenMusicHub,
+  onOpenPlaybook,
+  onOpenCharacterSelect,
+  onOpenBranding,
+  selectedCharacterName,
   soundEnabled,
   onToggleSound,
   highScore,
@@ -52,30 +61,45 @@ export const StartScreen: React.FC<StartScreenProps> = ({
   ];
 
   return (
-    <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-5 z-30 text-white rounded-xl sm:rounded-2xl overflow-y-auto overscroll-contain">
+    <div className="absolute inset-0 bg-neutral-950/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-5 z-30 text-white rounded-2xl overflow-y-auto safe-top safe-bottom">
       {/* Top Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="px-2 py-1 rounded-lg bg-white flex items-center shadow-[0_0_12px_rgba(29,206,159,0.4)]">
-            <OPayLogo height={20} variant="dark" />
+      <div className="flex items-center justify-between gap-1 flex-wrap sm:flex-nowrap">
+        <div 
+          onClick={onOpenBranding}
+          className="flex items-center gap-1.5 sm:gap-2 min-w-0 cursor-pointer hover:opacity-90 transition-opacity"
+          title="Click to customize Company Logo & Name"
+        >
+          <div className="px-1.5 sm:px-2 py-1 rounded-lg bg-white flex items-center shadow-[0_0_12px_rgba(29,206,159,0.4)] shrink-0">
+            <OPayLogo height={18} variant="dark" />
           </div>
-          <div>
-            <div className="text-[10px] uppercase font-bold tracking-widest text-emerald-400">
-              Field Operations Academy
+          <div className="min-w-0">
+            <div className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-emerald-400 truncate">
+              OPay Field Operations App
             </div>
-            <div className="text-xs font-semibold text-neutral-300">
-              OPay Merchant Loan &amp; CDL Policy Edition
+            <div className="text-[11px] sm:text-xs font-semibold text-neutral-300 truncate">
+              Merchant Loan &amp; CDL Policy Academy
             </div>
           </div>
         </div>
 
-        <button
-          onClick={onToggleSound}
-          className="p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-          aria-label="Toggle Sound"
-        >
-          {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-neutral-500" />}
-        </button>
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <button
+            onClick={onOpenMusicHub}
+            className="px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-300 hover:text-white transition-colors cursor-pointer text-[11px] sm:text-xs font-bold flex items-center gap-1 touch-btn"
+            aria-label="Open Music Studio"
+          >
+            <Music className="w-3.5 h-3.5 text-teal-400" />
+            <span className="hidden xs:inline sm:inline">Soundtrack</span>
+          </button>
+
+          <button
+            onClick={onToggleSound}
+            className="p-1.5 sm:p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer touch-btn"
+            aria-label="Toggle Sound"
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-neutral-500" />}
+          </button>
+        </div>
       </div>
 
       {/* Main Center Stage */}
@@ -93,10 +117,20 @@ export const StartScreen: React.FC<StartScreenProps> = ({
           Pilot your CDL Field Lead across busy FMCG markets. <strong>Only verified, compliant loan disbursement approaches award points and portfolio cash.</strong> Avoid dead kiosks and volume manipulation!
         </p>
 
-        {/* Current Standing & High Score */}
-        <div className="flex items-center justify-center gap-2 mb-4">
+        {/* Current Standing, Character & High Score */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+          <button
+            onClick={onOpenCharacterSelect}
+            className="px-3 py-1 bg-neutral-900 hover:bg-neutral-800 border border-emerald-500/50 rounded-xl text-xs text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-emerald-400 transition-all touch-btn"
+            title="Choose your OPay Runner Character"
+          >
+            <span>🏃🏾</span>
+            <span>Runner: <strong className="text-emerald-300 font-sans">{selectedCharacterName || 'Chioma Okoye'}</strong></span>
+            <span className="text-[10px] text-amber-400 underline font-normal">Change</span>
+          </button>
+
           <div className="px-3 py-1 bg-neutral-900 border border-emerald-500/40 rounded-xl text-xs">
-            <span className="text-neutral-400 mr-1">Starting Standing:</span>
+            <span className="text-neutral-400 mr-1">Rank:</span>
             <span className="text-amber-400 font-bold">{currentTier}</span>
           </div>
 
@@ -148,57 +182,68 @@ export const StartScreen: React.FC<StartScreenProps> = ({
         <div className="text-[11px] text-neutral-300 leading-snug">{tips[selectedTip].desc}</div>
       </div>
 
-      {/* Quick Access Training Modes & Creator tools */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-2 border-t border-neutral-900">
+      {/* Quick Access Training Modes & Creator Password Reset (Responsive 3x2 on mobile, 6x1 on desktop) */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 pt-2 border-t border-neutral-900">
+        <button
+          onClick={onOpenPlaybook}
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[9.5px] sm:text-[11px] font-semibold text-amber-300 border border-amber-500/30 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
+          title="CDLM Best Practice Submissions Playbook"
+        >
+          <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+          <span className="truncate">Playbook</span>
+        </button>
+
         <button
           onClick={onOpenHierarchy}
-          className="py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
         >
           <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Hierarchy</span>
+          <span className="truncate">Hierarchy</span>
         </button>
 
         <button
           onClick={onOpenMerchantEncounter}
-          className="py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
         >
           <Store className="w-3.5 h-3.5 text-amber-400" />
-          <span>Scenarios</span>
+          <span className="truncate">Scenarios</span>
         </button>
 
         <button
           onClick={onOpenQuiz}
-          className="py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
         >
           <FileQuestion className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Policy Exam</span>
+          <span className="truncate">Exam</span>
         </button>
 
         <button
           onClick={onOpenLeaderboard}
-          className="py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-[9.5px] sm:text-[11px] font-semibold text-neutral-200 border border-neutral-800 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
         >
           <Trophy className="w-3.5 h-3.5 text-amber-400" />
-          <span>Rankings</span>
-        </button>
-
-        <button
-          onClick={onOpenFeedback}
-          className="py-2 px-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-[9.5px] sm:text-[11px] font-semibold text-cyan-300 border border-cyan-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
-          title="Leave feedback for the Creator"
-        >
-          <MessageSquarePlus className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Feedback</span>
+          <span className="truncate">Rankings</span>
         </button>
 
         <button
           onClick={onOpenPasswordReset}
-          className="py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[9.5px] sm:text-[11px] font-semibold text-amber-300 border border-amber-500/30 flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors"
+          className="py-1.5 sm:py-2 px-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-[9.5px] sm:text-[11px] font-semibold text-amber-300 border border-amber-500/30 flex flex-col items-center justify-center gap-0.5 sm:gap-1 cursor-pointer transition-colors touch-btn"
           title="Creator / Admin Password Recovery Console"
         >
           <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-          <span>Reset Pass</span>
+          <span className="truncate">Reset Pass</span>
         </button>
+      </div>
+
+      {/* Official Hamvida Tech Signature Badge at Bottom of Start Screen */}
+      <div className="pt-2 flex items-center justify-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-neutral-900 border border-[#F6D870]/30 shadow-sm">
+          <HamvidaLogo size={15} />
+          <span className="text-[11.5px] font-bold text-white tracking-tight flex items-center gap-1">
+            <span className="text-neutral-400 font-medium">Made by</span>
+            <span className="text-[#F6D870] font-black">Hamvida Tech</span>
+          </span>
+        </div>
       </div>
     </div>
   );

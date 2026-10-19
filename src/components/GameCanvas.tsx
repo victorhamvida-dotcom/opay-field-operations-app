@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { soundManager } from '../utils/sound';
 import { CDLSubLevel } from '../types/cdlPolicy';
+import { getSelectedCharacter, RunnerCharacter } from '../types/characters';
+import { getActivePolicySnapshot, PolicyGeneratedItem } from '../types/policyGameEngine';
 import confetti from 'canvas-confetti';
 
 export type GameState = 'start' | 'playing' | 'paused' | 'gameover' | 'victory';
@@ -17,6 +19,8 @@ export interface GameStats {
   whitelistedHits: number;
   fraudBlocks: number;
   elapsedSeconds: number;
+  terminatedByTribunal?: boolean;
+  tribunalReason?: string;
 }
 
 interface Particle {
@@ -86,6 +90,7 @@ interface GameCanvasProps {
   onStatsUpdate: (stats: GameStats) => void;
   soundEnabled: boolean;
   onTriggerEncounter: () => void;
+  activePolicyVersion?: string; // Triggers dynamic engine re-read when creator or DH updates policy
 }
 
 export const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -95,6 +100,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   onStatsUpdate,
   soundEnabled,
   onTriggerEncounter,
+  activePolicyVersion,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -210,8 +216,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   useEffect(() => {
     if (gameState === 'playing') {
       resetGame();
+      soundManager.startMusic();
+    } else if (gameState === 'paused') {
+      stateRef.current.isGameActive = false;
     } else {
       stateRef.current.isGameActive = false;
+      soundManager.stopMusic();
     }
   }, [gameState, resetGame]);
 
@@ -259,9 +269,41 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     let animationFrameId: number;
     let lastTime = performance.now();
 
+    const activePolicy = getActivePolicySnapshot();
+
     const spawnItem = (width: number) => {
       const state = stateRef.current;
       const rand = Math.random();
+
+      // Check if active policy has custom synthesized AI cards
+      if (activePolicy && activePolicy.items && activePolicy.items.length > 0 && rand < 0.65) {
+        const customItem: PolicyGeneratedItem = activePolicy.items[Math.floor(Math.random() * activePolicy.items.length)];
+        const isGood = customItem.category === 'right_approach' || customItem.category === 'tactic_milestone';
+        
+        let mappedType: FieldDropItem['type'] = isGood 
+          ? (customItem.category === 'tactic_milestone' ? 'tactic_dossier' : 'whitelisted_fmcg')
+          : 'volume_manip';
+
+        state.items.push({
+          id: Math.random() + Date.now(),
+          type: mappedType,
+          x: Math.random() * (width - 64 - 20) + 10,
+          y: -64,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: ((0.85 + state.difficultyMultiplier * 0.4) * (localStorage.getItem('opay_user_slow_pace') === 'true' ? 0.72 : 1.0)) + Math.random() * 0.4,
+          width: 64,
+          height: 64,
+          value: customItem.value,
+          cashAmount: customItem.cashAmount,
+          title: customItem.title,
+          subText: customItem.subText,
+          color: customItem.color,
+          icon: customItem.icon,
+          pulse: 0,
+          isRightApproach: isGood,
+        });
+        return;
+      }
 
       let type: FieldDropItem['type'] = 'whitelisted_fmcg';
       let title = 'WHITELISTED FMCG';
@@ -372,15 +414,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
       const itemW = 64;
       const itemH = 64;
       const spawnX = Math.random() * (width - itemW - 20) + 10;
-      // Readable pace; slower if user saved "Prefer slower gameplay pace"
-      const slower =
-        typeof document !== 'undefined' && document.body?.closest('[data-slower-pace="1"]')
-          ? 0.72
-          : typeof document !== 'undefined' &&
-            document.querySelector('[data-slower-pace="1"]')
-          ? 0.72
-          : 1;
-      const baseSpeed = (0.9 + state.difficultyMultiplier * 0.45) * slower;
+      // Respect user's personalized speed request
+      const userSlowPreference = localStorage.getItem('opay_user_slow_pace') === 'true';
+      const speedScale = userSlowPreference ? 0.72 : 1.0;
+      // Readable pace: ~1.3 px/frame at start (≈9-12 seconds to cross the screen), ramping gently
+      const baseSpeed = (0.85 + state.difficultyMultiplier * 0.4) * speedScale;
 
       state.items.push({
         id: Math.random() + Date.now(),
@@ -431,6 +469,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         scale,
       });
     };
+
+    const activeChar: RunnerCharacter = getSelectedCharacter();
 
     const render = (currentTime: number) => {
       const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
@@ -580,12 +620,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
               if (item.type === 'compliance_shield') {
                 state.shields = Math.min(3, state.shields + 1);
-                soundManager.playShieldPickup();
+                soundManager.playCollect(1.5);
                 addFloatingText(item.x, item.y - 12, '+1 COMPLIANCE SHIELD', '#38BDF8', 1.2);
               } else if (item.type === 'tactic_dossier') {
                 state.tacticsProgress++;
                 soundManager.playTacticsLevelUp();
-                soundManager.playTierUp();
+                soundManager.playTierUpgradeFanfare();
                 state.screenShake = 0.7;
 
                 // CDL Tier advancement upon tactic milestones
@@ -620,10 +660,22 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                     elapsedSeconds: state.elapsedPlaySeconds,
                   });
                 }
+              } else if (item.type === 'whitelisted_fmcg') {
+                soundManager.playWhitelistedCollect();
+                if (state.combo > 1 && state.combo % 3 === 0) {
+                  soundManager.playComboUp(state.combo);
+                }
+                addFloatingText(item.x, item.y - 12, `+₦${(item.cashAmount / 1000).toLocaleString()}k [${item.title}]`, '#34D399', 1.1);
+                addParticles(item.x + item.width / 2, item.y + item.height / 2, '#10B981', 16, true);
+              } else if (item.type === 'vfo_verified') {
+                soundManager.playStampApproval();
+                addFloatingText(item.x, item.y - 12, `VFO VERIFIED! +₦${(item.cashAmount / 1000).toLocaleString()}k`, '#A855F7', 1.2);
+                addParticles(item.x + item.width / 2, item.y + item.height / 2, '#A855F7', 18, true);
               } else {
-                soundManager.playRightApproach();
                 soundManager.playDisbursementCash();
-                if (state.combo > 1) soundManager.playCombo(state.combo);
+                if (state.combo > 1 && state.combo % 3 === 0) {
+                  soundManager.playComboUp(state.combo);
+                }
                 addFloatingText(item.x, item.y - 12, `+₦${(item.cashAmount / 1000).toLocaleString()}k [${item.title}]`, '#34D399', 1.1);
                 addParticles(item.x + item.width / 2, item.y + item.height / 2, '#10B981', 16, true);
               }
@@ -639,8 +691,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
               } else {
                 // Wrong approach penalty: DEDUCTS score, resets combo, and causes tier downgrade risk
                 state.screenShake = 0.8;
-                soundManager.playWrongApproach();
                 soundManager.playHit();
+                soundManager.playPolicyBuzzer();
                 state.combo = 0;
                 state.score = Math.max(0, state.score + item.value); // item.value is negative
                 state.cashDisbursed = Math.max(0, state.cashDisbursed + item.cashAmount);
@@ -649,7 +701,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 if (item.type === 'volume_manip' || item.type === 'kickback_scam') {
                   if (state.cdlTierIndex > 0) {
                     state.cdlTierIndex--;
-                    soundManager.playTierDown();
                     addFloatingText(width / 2 - 80, player.y - 60, `POLICY VIOLATION! DOWNGRADED TO ${TIER_ORDER[state.cdlTierIndex]}`, '#EF4444', 1.3);
                   }
                 }
@@ -657,9 +708,10 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                 addParticles(item.x + item.width / 2, item.y + item.height / 2, '#EF4444', 20, true);
                 addFloatingText(item.x, item.y - 10, `WRONG APPROACH! 0 PTS (${item.title})`, '#EF4444', 1.2);
 
-                // Game Over if entering Warning 1 with 0 cash balance
-                if (state.cdlTierIndex === 0 && state.cashDisbursed <= 0) {
+                // Severe Failure: Plunging into Warning Tier triggers Disciplinary Tribunal
+                if (state.cdlTierIndex === 0 && (state.cashDisbursed <= 0 || state.score <= 0)) {
                   state.isGameActive = false;
+                  soundManager.playPolicyBuzzer();
                   soundManager.playGameOver();
                   onGameOver({
                     score: state.score,
@@ -673,6 +725,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                     whitelistedHits: state.whitelistedHits,
                     fraudBlocks: state.fraudBlocks,
                     elapsedSeconds: state.elapsedPlaySeconds,
+                    terminatedByTribunal: true,
+                    tribunalReason: item.type === 'volume_manip' 
+                      ? 'Severe Volume Manipulation Penalty' 
+                      : item.type === 'kickback_scam' 
+                      ? 'Unauthorized Merchant Kickback Breach' 
+                      : 'Portfolio Bankruptcy & Non-performing Loan Threshold',
                   });
                 }
               }
@@ -755,13 +813,16 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.shadowBlur = 0;
 
         // Corner badge: ✓ for right approach, ✗ for wrong approach (instant read)
-        ctx.beginPath();
-        ctx.arc(rw / 2 - 4, -rh / 2 + 4, 9, 0, Math.PI * 2);
-        ctx.fillStyle = item.isRightApproach ? '#10B981' : '#EF4444';
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 11px system-ui, sans-serif';
-        ctx.fillText(item.isRightApproach ? '✓' : '✗', rw / 2 - 4, -rh / 2 + 4.5);
+        const showBadge = localStorage.getItem('opay_user_badges') !== 'false';
+        if (showBadge) {
+          ctx.beginPath();
+          ctx.arc(rw / 2 - 4, -rh / 2 + 4, 9, 0, Math.PI * 2);
+          ctx.fillStyle = item.isRightApproach ? '#10B981' : '#EF4444';
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 11px system-ui, sans-serif';
+          ctx.fillText(item.isRightApproach ? '✓' : '✗', rw / 2 - 4, -rh / 2 + 4.5);
+        }
 
         // Readable label pill below card (title + sub text)
         ctx.font = 'bold 11px system-ui, sans-serif';
@@ -810,52 +871,128 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         ctx.shadowBlur = 0;
       }
 
-      // CDL Field Cruiser Body
-      const cdlGrad = ctx.createLinearGradient(pX, pY, pX, pY + pH);
-      cdlGrad.addColorStop(0, '#10B981');
-      cdlGrad.addColorStop(1, '#047857');
-      ctx.fillStyle = cdlGrad;
-      ctx.shadowColor = '#10B981';
-      ctx.shadowBlur = player.isDashing ? 20 : 10;
+      // Animated 3D-Style Running Officer Sprite & Shadows
+      const runCycle = Math.sin(currentTime * 0.015);
+      const legBob = Math.cos(currentTime * 0.015) * 6;
+      const armBob = Math.sin(currentTime * 0.015) * 8;
+      const charColor = activeChar.primaryColor;
+      const accent = activeChar.accentColor;
+
+      // Character Ground Shadow
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
       ctx.beginPath();
-      ctx.roundRect(pX, pY, pW, pH, 14);
+      ctx.ellipse(pX + pW / 2, pY + pH + 4, pW * 0.45, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Left Running Leg
+      ctx.fillStyle = '#1E293B';
+      ctx.beginPath();
+      ctx.roundRect(pX + 14, pY + pH - 18 + legBob, 12, 22 - legBob, 4);
       ctx.fill();
 
-      // Border
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = '#34D399';
+      // Right Running Leg
+      ctx.beginPath();
+      ctx.roundRect(pX + pW - 26, pY + pH - 18 - legBob, 12, 22 + legBob, 4);
+      ctx.fill();
+
+      // Running Shoes with OPay Green soles
+      ctx.fillStyle = '#10B981';
+      ctx.fillRect(pX + 12, pY + pH + 2 + legBob, 15, 5);
+      ctx.fillRect(pX + pW - 28, pY + pH + 2 - legBob, 15, 5);
+
+      // Officer Body / Uniform Torso (with OPay Branding)
+      const torsoGrad = ctx.createLinearGradient(pX, pY + 18, pX, pY + pH - 12);
+      torsoGrad.addColorStop(0, charColor);
+      torsoGrad.addColorStop(1, '#064E3B');
+      ctx.fillStyle = torsoGrad;
+      ctx.beginPath();
+      ctx.roundRect(pX + 10, pY + 18, pW - 20, pH - 32, 10);
+      ctx.fill();
+
+      // OPay Vest Accent Lines & Tier Badge
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
       ctx.stroke();
-      ctx.shadowBlur = 0;
 
-      // CDL Badge display
-      ctx.fillStyle = '#064E3B';
+      // Center Vest Emblem (OPay "O" Ring)
+      ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.roundRect(pX + 8, pY + 8, pW - 16, pH - 24, 8);
+      ctx.arc(pX + pW / 2, pY + 32, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1DCE9F';
+      ctx.beginPath();
+      ctx.arc(pX + pW / 2, pY + 32, 4, 0, Math.PI * 2);
       ctx.fill();
 
-      // "CDL" text
-      ctx.fillStyle = '#A7F3D0';
-      ctx.font = 'bold 11px system-ui, sans-serif';
+      // Running Arms (Left holding terminal, Right reaching forward)
+      ctx.fillStyle = activeChar.skinTone;
+      // Left arm (holds POS Terminal)
+      ctx.beginPath();
+      ctx.roundRect(pX - 2, pY + 22 - armBob, 10, 24, 5);
+      ctx.fill();
+      // OPay POS Terminal in hand
+      ctx.fillStyle = '#1E1E2E';
+      ctx.beginPath();
+      ctx.roundRect(pX - 6, pY + 36 - armBob, 12, 18, 3);
+      ctx.fill();
+      ctx.fillStyle = '#10B981';
+      ctx.fillRect(pX - 4, pY + 40 - armBob, 8, 7);
+
+      // Right arm (reaching forward)
+      ctx.fillStyle = activeChar.skinTone;
+      ctx.beginPath();
+      ctx.roundRect(pX + pW - 8, pY + 22 + armBob, 10, 24, 5);
+      ctx.fill();
+
+      // Officer Head / Cap
+      ctx.fillStyle = activeChar.skinTone;
+      ctx.beginPath();
+      ctx.arc(pX + pW / 2, pY + 12 + runCycle * 1.5, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hair
+      ctx.fillStyle = activeChar.hairColor;
+      ctx.beginPath();
+      ctx.arc(pX + pW / 2, pY + 8 + runCycle * 1.5, 12, Math.PI, Math.PI * 2);
+      ctx.fill();
+
+      // Official OPay Cap
+      ctx.fillStyle = charColor;
+      ctx.beginPath();
+      ctx.roundRect(pX + pW / 2 - 12, pY + 1 + runCycle * 1.5, 24, 8, [4, 4, 0, 0]);
+      ctx.fill();
+      // Cap Visor
+      ctx.fillStyle = '#047857';
+      ctx.fillRect(pX + pW / 2 - 14, pY + 7 + runCycle * 1.5, 28, 3);
+
+      // Dynamic Character Name & Live Tier Plaque Over Avatar
+      ctx.fillStyle = 'rgba(2, 6, 4, 0.85)';
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(pX - 16, pY - 24, pW + 32, 18, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 9.5px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('CDL LEAD', pX + pW / 2, pY + pH / 2 - 2);
+      ctx.fillText(`${activeChar.name.split(' ')[0]} • ${TIER_ORDER[state.cdlTierIndex]}`, pX + pW / 2, pY - 12);
 
-      // Current Tier indicator on vehicle
-      ctx.fillStyle = '#FBBF24';
-      ctx.font = 'bold 8.5px system-ui, sans-serif';
-      ctx.fillText(TIER_ORDER[state.cdlTierIndex], pX + pW / 2, pY + pH / 2 + 10);
-
-      // Thrusters
-      const flameHeight = Math.random() * 8 + 4 + (player.isDashing ? 12 : 0);
-      const flameGrad = ctx.createLinearGradient(0, pY + pH, 0, pY + pH + flameHeight);
-      flameGrad.addColorStop(0, '#34D399');
-      flameGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = flameGrad;
-      ctx.beginPath();
-      ctx.moveTo(pX + 18, pY + pH);
-      ctx.lineTo(pX + pW / 2, pY + pH + flameHeight);
-      ctx.lineTo(pX + pW - 18, pY + pH);
-      ctx.closePath();
-      ctx.fill();
+      // Turbo Dash Wind Streamers
+      if (player.isDashing) {
+        ctx.strokeStyle = '#34D399';
+        ctx.lineWidth = 2;
+        for (let j = 0; j < 3; j++) {
+          const streamY = pY + 10 + j * 16;
+          ctx.beginPath();
+          ctx.moveTo(pX - 10 - Math.random() * 20, streamY);
+          ctx.lineTo(pX - 4, streamY);
+          ctx.stroke();
+        }
+      }
 
       ctx.restore();
 
@@ -886,15 +1023,13 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
 
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [gameState, onGameOver, onUnlockTactic, onStatsUpdate, onTriggerEncounter]);
+  }, [gameState, onGameOver, onUnlockTactic, onStatsUpdate, onTriggerEncounter, activePolicyVersion]);
 
   const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
     if (gameState !== 'playing') return;
-    // Prevent page scroll / bounce while steering on iOS/Android
     if (e.cancelable) e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
-    if (!touch || rect.width <= 0) return;
     const scaleX = e.currentTarget.width / rect.width;
     touchStateRef.current = {
       active: true,
@@ -907,14 +1042,56 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     if (e.cancelable) e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
     const touch = e.touches[0];
-    if (!touch || rect.width <= 0) return;
     const scaleX = e.currentTarget.width / rect.width;
     touchStateRef.current.touchX = (touch.clientX - rect.left) * scaleX;
   };
 
-  const handleTouchEnd = (e?: React.TouchEvent<HTMLCanvasElement>) => {
-    if (e && e.cancelable) e.preventDefault();
+  const handleTouchEnd = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    if (e.cancelable) e.preventDefault();
     touchStateRef.current.active = false;
+  };
+
+  // Modern Pointer Events support (touchscreens, stylus, mouse on Android/iOS/Windows tablets & HP convertibles)
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (gameState !== 'playing') return;
+    if (e.pointerType === 'mouse' && e.buttons !== 1) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const scaleX = e.currentTarget.width / rect.width;
+    touchStateRef.current = {
+      active: true,
+      touchX: (e.clientX - rect.left) * scaleX,
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Ignored safely if pointer capture not supported
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (gameState !== 'playing') return;
+    if (!touchStateRef.current.active && e.pointerType === 'mouse') {
+      // Free mouse hover movement
+      const rect = e.currentTarget.getBoundingClientRect();
+      const scaleX = e.currentTarget.width / rect.width;
+      const mouseX = (e.clientX - rect.left) * scaleX;
+      playerRef.current.x = Math.max(8, Math.min(e.currentTarget.width - playerRef.current.width - 8, mouseX - playerRef.current.width / 2));
+      return;
+    }
+    if (touchStateRef.current.active) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const scaleX = e.currentTarget.width / rect.width;
+      touchStateRef.current.touchX = (e.clientX - rect.left) * scaleX;
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    touchStateRef.current.active = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // Ignored safely
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -926,16 +1103,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   };
 
   return (
-    <div className="relative game-canvas-frame w-full mx-auto overflow-hidden rounded-xl sm:rounded-2xl border-2 border-emerald-500/30 shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-neutral-950">
+    <div className="relative w-full max-w-[480px] mx-auto overflow-hidden rounded-2xl border-2 border-emerald-500/30 shadow-[0_0_35px_rgba(16,185,129,0.2)] bg-neutral-950 aspect-[9/14] max-h-[68vh] sm:max-h-[72vh] md:max-h-[78vh]">
       <canvas
         ref={canvasRef}
         width={450}
         height={700}
-        className="w-full h-full block cursor-ew-resize select-none touch-none"
+        className="w-full h-full block cursor-ew-resize select-none touch-none object-contain"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseMove={handleMouseMove}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       />
     </div>
   );

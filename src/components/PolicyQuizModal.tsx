@@ -35,7 +35,7 @@ export const PolicyQuizModal: React.FC<PolicyQuizModalProps> = ({
 
     const isCorrect = selectedOption === question.correctAnswer;
     if (isCorrect) {
-      soundManager.playQuizCorrect();
+      soundManager.playCollect(1.5);
       setCorrectTotal((prev) => prev + 1);
       setTotalScoreAccrued((prev) => prev + 300);
       confetti({
@@ -44,7 +44,7 @@ export const PolicyQuizModal: React.FC<PolicyQuizModalProps> = ({
         origin: { y: 0.6 },
       });
     } else {
-      soundManager.playQuizWrong();
+      soundManager.playHit();
     }
   };
 
@@ -69,8 +69,8 @@ export const PolicyQuizModal: React.FC<PolicyQuizModalProps> = ({
   };
 
   return (
-    <div className="modal-layer">
-      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-xl modal-card shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-neutral-950/85 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto safe-top safe-bottom">
+      <div className="bg-neutral-900 border border-emerald-500/40 rounded-2xl w-full max-w-xl max-h-[95vh] max-h-[95dvh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
         <div className="p-3 sm:p-4 border-b border-neutral-800 bg-neutral-950 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -94,7 +94,7 @@ export const PolicyQuizModal: React.FC<PolicyQuizModalProps> = ({
 
         {/* Content */}
         {!quizFinished ? (
-          <div className="p-3 sm:p-4 overflow-y-auto space-y-4 modal-card-body">
+          <div className="p-4 overflow-y-auto space-y-4">
             {/* Progress indicator */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-neutral-400">

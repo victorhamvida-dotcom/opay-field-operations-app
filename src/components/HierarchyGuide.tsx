@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { ORG_HIERARCHY, OrgRole, CDLM_MENTORS, CDLSubLevel } from '../types/cdlPolicy';
 import { Users, Sparkles, X, Target, TrendingUp } from 'lucide-react';
-import { soundManager } from '../utils/sound';
 
 interface HierarchyGuideProps {
   currentTier: CDLSubLevel;
@@ -43,10 +42,7 @@ export const HierarchyGuide: React.FC<HierarchyGuideProps> = ({ currentTier, onC
       {/* Tabs */}
       <div className="flex gap-2 my-3 border-b border-neutral-800 pb-2">
         <button
-          onClick={() => {
-            soundManager.playTabSwitch();
-            setActiveTab('hierarchy');
-          }}
+          onClick={() => setActiveTab('hierarchy')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
             activeTab === 'hierarchy'
               ? 'bg-emerald-500 text-neutral-950 shadow-md'
@@ -56,10 +52,7 @@ export const HierarchyGuide: React.FC<HierarchyGuideProps> = ({ currentTier, onC
           1. Field Chain of Command (RM → SM → CDLM → CDL)
         </button>
         <button
-          onClick={() => {
-            soundManager.playTabSwitch();
-            setActiveTab('mentors');
-          }}
+          onClick={() => setActiveTab('mentors')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
             activeTab === 'mentors'
               ? 'bg-emerald-500 text-neutral-950 shadow-md'
@@ -69,10 +62,7 @@ export const HierarchyGuide: React.FC<HierarchyGuideProps> = ({ currentTier, onC
           2. Six CDLM Best Practice Mentors
         </button>
         <button
-          onClick={() => {
-            soundManager.playTabSwitch();
-            setActiveTab('tiers');
-          }}
+          onClick={() => setActiveTab('tiers')}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-all ${
             activeTab === 'tiers'
               ? 'bg-emerald-500 text-neutral-950 shadow-md'
